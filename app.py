@@ -1,5 +1,6 @@
 import streamlit as st
 import openai
+from openai import OpenAI
 import yaml
 import io
 from PIL import Image, ImageDraw, ImageFont
@@ -7,7 +8,7 @@ import base64
 import textwrap
 
 # Configure OpenAI API
-openai.api_key = st.secrets["openai"]["api_key"]
+client = OpenAI(api_key=st.secrets["openai"]["api_key"])
 
 st.set_page_config(
     page_title="BIAN Use Case Analyzer",
@@ -63,7 +64,7 @@ def generate_bian_analysis(use_case):
     For the Swagger/OpenAPI specification, ensure it's properly formatted as YAML.
     """
     
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "You are a BIAN architecture expert helping analyze banking use cases."},
