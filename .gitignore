@@ -59,7 +59,7 @@ venv.bak/
 
 # Streamlit secrets
 # Uncomment this if you want to check in your secrets for demo purposes
-# .streamlit/secrets.toml
+.streamlit/secrets.toml
 
 # VSCode
 .vscode/
