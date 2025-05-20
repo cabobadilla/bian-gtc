@@ -240,6 +240,72 @@ def enhance_use_case(brief_use_case):
     
     return response.choices[0].message.content
 
+def generate_bian_analysis(use_case):
+    """Generate BIAN analysis using OpenAI's GPT model"""
+    
+    # Create a comprehensive prompt with detailed instructions
+    prompt = f"""
+    Analyze the following banking use case and provide a comprehensive mapping to BIAN (Banking Industry Architecture Network) V12 framework.
+    Map the use case steps to appropriate BIAN Service Domains, identify semantic APIs, and provide a draft OpenAPI specification.
+
+    Banking Use Case:
+    {use_case}
+
+    Provide a detailed analysis in the following format:
+
+    1. UNDERSTANDING OF THE USE CASE
+    - Provide a business-level understanding of the use case 
+    - Identify the main actors involved
+    - Summarize the key business events and processes
+    - Specify the data entities involved
+    - Note any specific business rules
+
+    2. BIAN V12 MAPPING
+    - Map each step of the use case to relevant BIAN V12 Service Domains
+    - For each Service Domain, identify the specific Service Operation(s) involved
+    - Note if the operation is Initiate, Control, Execute, etc.
+    - Explain how the Service Domain supports the use case
+
+    3. BIAN SEMANTIC APIS
+    - Based on the Service Domains identified, list the BIAN semantic APIs that would be used
+    - Specify the operation (POST, GET, PUT, etc.)
+    - Include expected request/response patterns
+    - Note any reference data requirements
+
+    4. RECOMMENDED APIS TO EXPOSE
+    - Recommend a set of REST APIs that should be exposed to support this use case
+    - For each API, provide the endpoint, method, and purpose
+    - Note any security or access control considerations
+    - Suggest appropriate error handling
+
+    5. SWAGGER/OPENAPI SPECIFICATION
+    - Provide a draft Swagger/OpenAPI 3.0 specification for the key APIs
+    - Include paths, methods, request parameters
+    - Define request/response schemas
+    - Include example values
+
+    6. ARCHITECTURE FLOW
+    - Describe the sequence of interactions between the identified Service Domains
+    - Note any external system interactions
+    - Specify data flow between components
+    - Identify any event notifications or subscriptions
+
+    Ensure the analysis is comprehensive, technically accurate, and aligns with BIAN V12 standards.
+    """
+    
+    # Call OpenAI to analyze the use case
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo-16k",  # Using the 16k token model for longer responses
+        messages=[
+            {"role": "system", "content": "You are a banking solution architect expert in the BIAN (Banking Industry Architecture Network) framework. You specialize in mapping banking use cases to BIAN service domains and designing API specifications."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.2,  # Lower temperature for more focused responses
+        max_tokens=10000  # Allow for detailed analysis
+    )
+    
+    return response.choices[0].message.content
+
 # Main app logic
 if st.session_state.step == 1:
     # Step 1: Use Case Analysis
