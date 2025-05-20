@@ -9,6 +9,13 @@ import math
 import openai
 import re
 import json
+import tempfile
+import subprocess
+import threading
+import time
+import requests
+from yaml import safe_load
+import uuid
 
 # Configure OpenAI API with a more compatible approach for version 0.28.1
 # First try to get from streamlit secrets
@@ -31,6 +38,28 @@ st.set_page_config(
     page_icon="🏦",
     layout="wide"
 )
+
+# Initialize session state for multi-step process
+if 'step' not in st.session_state:
+    st.session_state.step = 1  # Step 1: Analysis, Step 2: API Testing
+
+if 'api_deployment' not in st.session_state:
+    st.session_state.api_deployment = None
+
+if 'generated_apis' not in st.session_state:
+    st.session_state.generated_apis = []
+
+if 'current_api' not in st.session_state:
+    st.session_state.current_api = None
+
+# Function to move to next step
+def next_step():
+    st.session_state.step += 1
+
+# Function to go back to previous step
+def prev_step():
+    if st.session_state.step > 1:
+        st.session_state.step -= 1
 
 st.title("BIAN Use Case Analyzer")
 st.markdown("This tool analyzes banking use cases and maps them to BIAN Service Domains and APIs.")
@@ -211,520 +240,428 @@ def enhance_use_case(brief_use_case):
     
     return response.choices[0].message.content
 
-# Input section with example selector and enhancement option
-with st.form("use_case_form"):
-    st.subheader("Enter your banking use case")
-    
-    # Example selector
-    example_options = ["No example (custom input)", "Personal Loan Application", "Credit Card Dispute", "Account Opening"]
-    selected_example = st.selectbox("Select an example or create your own:", example_options)
-    
-    if selected_example == "No example (custom input)":
-        use_case = st.text_area("Enter your banking use case:", height=200)
-    else:
-        use_case = st.text_area("Enter your banking use case:", value=EXAMPLE_USE_CASES[selected_example], height=300)
-    
-    # Add enhancement option
-    enhance_option = st.checkbox("Enhance my use case with additional details for better BIAN mapping", value=True)
-    
-    submit_button = st.form_submit_button("Analyze Use Case")
-
-def generate_bian_analysis(use_case):
-    """Generate BIAN analysis using OpenAI's GPT model"""
-    
-    prompt = f"""
-    I need you to analyze the following banking use case and provide a structured analysis 
-    according to the BIAN (Banking Industry Architecture Network) v12 framework.
-    
-    USE CASE:
-    {use_case}
-    
-    Please provide the following analysis in a clearly structured format with ALL SIX sections. Each section MUST have content:
-    
-    1. UNDERSTANDING OF THE USE CASE:
-    - Business objectives
-    - Involved actors
-    - Key events
-    - Main process flow
-    
-    2. BIAN V12 MAPPING:
-    - Identify all relevant BIAN Service Domains (SDs) for the use case
-    - Include the complete name of each SD (e.g., "Customer Offer SD", "Consumer Loan SD")
-    - Provide a brief description of each SD's function
-    - Explain how each SD relates to the specific parts of the use case
-    
-    3. BIAN SEMANTIC APIS:
-    - List the standardized APIs corresponding to each identified Service Domain
-    - Specify the appropriate endpoint patterns (/SD/behavior/action)
-    - Include recommended operations (Initiate, Execute, Request, Retrieve, Notify) for each API
-    - Mention the purpose of each API in the context of this use case
-    
-    4. RECOMMENDED APIS TO EXPOSE:
-    - Suggest specific APIs the solution should expose to implement the use case
-    - Include operation types, URI patterns, and main parameters for each API
-    - Explain how these APIs would be used in the flow of the use case
-    
-    5. SWAGGER/OPENAPI SPECIFICATION:
-    - Provide a YAML block with suggested endpoints for at least one key API
-    - Include paths, operations, parameters, and response structures
-    - Format it correctly as a valid OpenAPI specification
-    
-    6. ARCHITECTURE FLOW:
-    - Describe the logical sequence of interactions between Service Domains
-    - Include the operations that would be called between SDs
-    - Explain the data that would flow between the different SDs
-    
-    IMPORTANT FORMATTING INSTRUCTIONS:
-    1. Begin each section with a clear heading like "1. UNDERSTANDING OF THE USE CASE:"
-    2. If you don't have enough information, make reasonable banking industry assumptions
-    3. YOU MUST PROVIDE CONTENT FOR ALL SIX SECTIONS - do not skip any section
-    4. Format the OpenAPI specification as proper YAML within a code block
-    
-    The BIAN Service Domains should come from the standard BIAN v12 framework, which includes domains like:
-    - Party Reference SD
-    - Customer Agreement SD
-    - Customer Offer SD
-    - Consumer Loan SD
-    - Current Account SD
-    - Payment Order SD
-    - Card Authorization SD
-    - Fraud Detection SD
-    - Customer Credit Rating SD
-    - Point of Service SD
-    - Product Design SD
-    - Customer Product/Service Eligibility SD
-    """
-    
-    # Using the older API style for openai 0.28.1
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo-16k",  # Using the larger context model
-        messages=[
-            {"role": "system", "content": "You are a BIAN architecture expert with deep knowledge of the BIAN v12 framework, Service Domains, and API patterns. You ALWAYS provide complete responses with ALL requested sections."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=4000  # Increasing token limit to ensure complete response
-    )
-    
-    return response.choices[0].message.content
-
-def create_architecture_diagram(services, sequence):
-    """Create a simple architecture diagram based on the services and sequence"""
-    img_width = 800
-    img_height = 600
-    img = Image.new('RGB', (img_width, img_height), color=(255, 255, 255))
-    draw = ImageDraw.Draw(img)
-    
-    # Try to use a system font, fallback to default
-    try:
-        font = ImageFont.truetype("Arial", 14)
-        title_font = ImageFont.truetype("Arial", 18)
-    except IOError:
-        font = ImageFont.load_default()
-        title_font = ImageFont.load_default()
-    
-    # Draw title
-    draw.text((img_width//2 - 120, 20), "Architecture Diagram", fill=(0, 0, 0), font=title_font)
-    
-    # Draw services as boxes
-    box_width = 150
-    box_height = 80
-    margin = 50
-    boxes_per_row = 3
-    
-    box_positions = {}
-    
-    for i, service in enumerate(services):
-        row = i // boxes_per_row
-        col = i % boxes_per_row
-        
-        x = margin + col * (box_width + margin)
-        y = 100 + row * (box_height + margin)
-        
-        # Draw box
-        draw.rectangle([(x, y), (x + box_width, y + box_height)], outline=(0, 0, 0), width=2)
-        
-        # Draw service name
-        lines = textwrap.wrap(service, width=15)
-        y_text = y + (box_height - len(lines) * 15) // 2
-        for line in lines:
-            draw.text((x + box_width//2 - len(line)*4, y_text), line, fill=(0, 0, 0), font=font)
-            y_text += 15
-            
-        # Store position for later use in drawing arrows
-        box_positions[service] = (x, y, x + box_width, y + box_height)
-    
-    # Draw sequence as arrows
-    arrow_color = (0, 0, 255)
-    for i in range(len(sequence) - 1):
-        if sequence[i] in box_positions and sequence[i+1] in box_positions:
-            start_box = box_positions[sequence[i]]
-            end_box = box_positions[sequence[i+1]]
-            
-            # Calculate start and end points for the arrow
-            start_x = (start_box[0] + start_box[2]) // 2
-            start_y = (start_box[1] + start_box[3]) // 2
-            end_x = (end_box[0] + end_box[2]) // 2
-            end_y = (end_box[1] + end_box[3]) // 2
-            
-            # Draw the arrow
-            draw.line([(start_x, start_y), (end_x, end_y)], fill=arrow_color, width=2)
-            
-            # Draw arrowhead
-            angle = math.atan2(end_y - start_y, end_x - start_x)
-            arrow_size = 10
-            draw.polygon([
-                (end_x - arrow_size * math.cos(angle - math.pi/6), end_y - arrow_size * math.sin(angle - math.pi/6)),
-                (end_x, end_y),
-                (end_x - arrow_size * math.cos(angle + math.pi/6), end_y - arrow_size * math.sin(angle + math.pi/6))
-            ], fill=arrow_color)
-    
-    # Convert to bytes
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    buf.seek(0)
-    
-    return buf
-
-def render_yaml(yaml_text):
-    """Render YAML with proper formatting"""
-    return f"""```yaml
-{yaml_text}
-```"""
-
-def extract_yaml(text):
-    """Extract YAML content from the response"""
-    if "```yaml" in text and "```" in text.split("```yaml")[1]:
-        return text.split("```yaml")[1].split("```")[0].strip()
-    elif "```" in text:
-        # Try to find any code block that might contain YAML
-        blocks = text.split("```")
-        for i in range(1, len(blocks), 2):
-            if i < len(blocks) and ":" in blocks[i] and "paths" in blocks[i]:
-                return blocks[i].strip()
-    
-    # Fallback: try to extract anything that looks like YAML
-    yaml_pattern = r'openapi:.*?paths:.*?components:'
-    match = re.search(yaml_pattern, text, re.DOTALL)
-    if match:
-        return match.group(0)
-    
-    return "# No valid YAML found in the response"
-
-def extract_sequence(text):
-    """Extract service domains and their sequence from the response"""
-    # This is a simplified extraction - in a real app you might want to use more 
-    # sophisticated parsing based on the actual structure of the response
-    domains = []
-    sequence = []
-    
-    if "BIAN V12 MAPPING" in text:
-        mapping_section = text.split("BIAN V12 MAPPING")[1].split("BIAN SEMANTIC APIS")[0]
-        # Extract service domains from bullet points
-        domains = re.findall(r'[-•]\s*(\w+(?:\s+\w+)*)\s*Service\s*Domain', mapping_section)
-    
-    if "ARCHITECTURE FLOW" in text:
-        flow_section = text.split("ARCHITECTURE FLOW")[1]
-        # Try to extract sequence - this is simplified and might need to be adapted
-        sequence = domains  # In a real implementation, parse the actual sequence
-    
-    return domains, sequence
-
-def extract_sections(analysis_text):
-    """Extract sections from the analysis with improved parsing"""
-    sections = {}
-    
-    # Define section patterns with multiple variations
-    section_patterns = {
-        "UNDERSTANDING OF THE USE CASE": [
-            r"(?i)(?:1\.?\s*)?UNDERSTANDING\s+OF\s+THE\s+USE\s+CASE\s*:?",
-            r"(?i)(?:1\.?\s*)?USE\s+CASE\s+UNDERSTANDING\s*:?",
-            r"(?i)(?:1\.?\s*)?UNDERSTANDING\s+THE\s+USE\s+CASE\s*:?",
-            r"(?i)(?:1\.?\s*)?USE\s+CASE\s+ANALYSIS\s*:?",
-            r"(?i)(?:1\.?\s*)?USE\s+CASE\s+OVERVIEW\s*:?"
-        ],
-        "BIAN V12 MAPPING": [
-            r"(?i)(?:2\.?\s*)?BIAN\s+V12\s+MAPPING\s*:?",
-            r"(?i)(?:2\.?\s*)?BIAN\s+MAPPING\s*:?",
-            r"(?i)(?:2\.?\s*)?MAPPING\s+TO\s+BIAN\s*:?",
-            r"(?i)(?:2\.?\s*)?BIAN\s+SERVICE\s+DOMAINS\s*:?",
-            r"(?i)(?:2\.?\s*)?SERVICE\s+DOMAINS\s+MAPPING\s*:?"
-        ],
-        "BIAN SEMANTIC APIS": [
-            r"(?i)(?:3\.?\s*)?BIAN\s+SEMANTIC\s+APIS\s*:?",
-            r"(?i)(?:3\.?\s*)?SEMANTIC\s+APIS\s*:?",
-            r"(?i)(?:3\.?\s*)?BIAN\s+APIS\s*:?",
-            r"(?i)(?:3\.?\s*)?STANDARDIZED\s+APIS\s*:?"
-        ],
-        "RECOMMENDED APIS TO EXPOSE": [
-            r"(?i)(?:4\.?\s*)?RECOMMENDED\s+APIS\s+TO\s+EXPOSE\s*:?",
-            r"(?i)(?:4\.?\s*)?APIS\s+TO\s+EXPOSE\s*:?",
-            r"(?i)(?:4\.?\s*)?RECOMMENDED\s+APIS\s*:?",
-            r"(?i)(?:4\.?\s*)?SOLUTION\s+APIS\s*:?"
-        ],
-        "SWAGGER/OPENAPI SPECIFICATION": [
-            r"(?i)(?:5\.?\s*)?SWAGGER\/OPENAPI\s+SPECIFICATION\s*:?",
-            r"(?i)(?:5\.?\s*)?OPENAPI\s+SPECIFICATION\s*:?",
-            r"(?i)(?:5\.?\s*)?SWAGGER\s+SPECIFICATION\s*:?",
-            r"(?i)(?:5\.?\s*)?API\s+SPECIFICATION\s*:?",
-            r"(?i)(?:5\.?\s*)?OPENAPI\s+SPEC\s*:?"
-        ],
-        "ARCHITECTURE FLOW": [
-            r"(?i)(?:6\.?\s*)?ARCHITECTURE\s+FLOW\s*:?",
-            r"(?i)(?:6\.?\s*)?FLOW\s+ARCHITECTURE\s*:?",
-            r"(?i)(?:6\.?\s*)?SERVICE\s+DOMAIN\s+FLOW\s*:?",
-            r"(?i)(?:6\.?\s*)?ARCHITECTURE\s+DIAGRAM\s*:?",
-            r"(?i)(?:6\.?\s*)?INTERACTION\s+FLOW\s*:?",
-            r"(?i)(?:6\.?\s*)?ARCHITECTURE\s*:?"
-        ]
-    }
-    
-    # Initialize sections dict with empty content
-    for section_name in section_patterns:
-        sections[section_name] = ""
-    
-    # Try to find sections using regex patterns
-    for section_name, patterns in section_patterns.items():
-        for pattern in patterns:
-            matches = re.finditer(pattern, analysis_text, re.MULTILINE | re.IGNORECASE)
-            for match in matches:
-                start_pos = match.start()
-                # Found the start of a section, now find the end
-                end_pos = len(analysis_text)
-                
-                # Look for the start of the next section
-                for next_section, next_patterns in section_patterns.items():
-                    if next_section != section_name:
-                        for next_pattern in next_patterns:
-                            next_matches = re.finditer(next_pattern, analysis_text[start_pos+1:], re.MULTILINE | re.IGNORECASE)
-                            for next_match in next_matches:
-                                potential_end = start_pos + 1 + next_match.start()
-                                if potential_end < end_pos:
-                                    end_pos = potential_end
-                
-                # Extract the section content
-                section_content = analysis_text[start_pos:end_pos].strip()
-                
-                # Remove the section header from the content
-                header_end = section_content.find('\n')
-                if header_end > 0:
-                    section_content = section_content[header_end:].strip()
-                
-                # Store the content if it's non-empty
-                if section_content and len(section_content) > 10:  # Avoid empty or very short sections
-                    sections[section_name] = section_content
-                    break  # Found a valid match for this section, move to next section
-    
-    # Fallback: If standard extraction failed, try simpler numbered section approach
-    if all(not content for content in sections.values()):
-        numbered_sections = re.split(r'\n\s*\d+\.\s+', analysis_text)
-        if len(numbered_sections) >= 7:  # Should be at least 7 parts (intro + 6 sections)
-            section_names = list(sections.keys())
-            for i in range(min(6, len(section_names))):
-                if i+1 < len(numbered_sections):
-                    sections[section_names[i]] = numbered_sections[i+1].strip()
-    
-    # Final fallback: If all else fails, just split the text into roughly equal parts
-    if all(not content for content in sections.values()) and len(analysis_text) > 1000:
-        section_names = list(sections.keys())
-        section_size = len(analysis_text) // 6
-        for i in range(6):
-            start_idx = i * section_size
-            end_idx = (i+1) * section_size if i < 5 else len(analysis_text)
-            sections[section_names[i]] = analysis_text[start_idx:end_idx].strip()
-    
-    return sections
-
 # Main app logic
-if submit_button and use_case:
-    with st.spinner("Processing your use case..."):
-        try:
-            # If enhancement option is selected, enhance the use case first
-            if enhance_option and selected_example == "No example (custom input)":
-                with st.status("Enhancing use case details..."):
-                    enhanced_use_case = enhance_use_case(use_case)
-                    st.write("Use case enhanced with additional details for better BIAN mapping")
-                use_case = enhanced_use_case
-            
-            # Show the use case being analyzed
-            with st.expander("Analyzing this use case", expanded=False):
-                st.markdown(use_case)
+if st.session_state.step == 1:
+    # Step 1: Use Case Analysis
+    with st.form("use_case_form"):
+        st.subheader("Enter your banking use case")
+        
+        # Example selector
+        example_options = ["No example (custom input)", "Personal Loan Application", "Credit Card Dispute", "Account Opening"]
+        selected_example = st.selectbox("Select an example or create your own:", example_options)
+        
+        if selected_example == "No example (custom input)":
+            use_case = st.text_area("Enter your banking use case:", height=200)
+        else:
+            use_case = st.text_area("Enter your banking use case:", value=EXAMPLE_USE_CASES[selected_example], height=300)
+        
+        # Add enhancement option
+        enhance_option = st.checkbox("Enhance my use case with additional details for better BIAN mapping", value=True)
+        
+        submit_button = st.form_submit_button("Analyze Use Case")
+
+    if submit_button and use_case:
+        with st.spinner("Processing your use case..."):
+            try:
+                # If enhancement option is selected, enhance the use case first
+                if enhance_option and selected_example == "No example (custom input)":
+                    with st.status("Enhancing use case details..."):
+                        enhanced_use_case = enhance_use_case(use_case)
+                        st.write("Use case enhanced with additional details for better BIAN mapping")
+                    use_case = enhanced_use_case
                 
-            with st.status("Analyzing against BIAN framework..."):
-                analysis = generate_bian_analysis(use_case)
-                st.write("Analysis complete")
+                # Show the use case being analyzed
+                with st.expander("Analyzing this use case", expanded=False):
+                    st.markdown(use_case)
                 
-                # Debug: Save raw analysis to session state for debugging
-                st.session_state.raw_analysis = analysis
-                
-                # Print response to debug
-                print("RAW RESPONSE START")
-                print(analysis[:500])  # First 500 chars
-                print("...")
-                print(analysis[-500:])  # Last 500 chars
-                print("RAW RESPONSE END")
-            
-            # Display the analysis in tabs
-            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-                "Use Case Understanding", 
-                "BIAN Mapping", 
-                "API Recommendations", 
-                "OpenAPI Spec",
-                "Architecture",
-                "Debug"
-            ])
-            
-            # Extract sections with improved parsing
-            sections = extract_sections(analysis)
-            
-            # Debug: Store extracted sections in session state
-            st.session_state.extracted_sections = sections
-            
-            # Utility function to format raw text in case extraction failed
-            def format_section_content(tab, section_name, section_content, section_keywords):
-                if section_content:
-                    tab.markdown(section_content)
-                else:
-                    # Try to find the section in the raw response
-                    found_content = False
-                    for keyword in section_keywords:
-                        if keyword.lower() in analysis.lower():
-                            pattern = re.compile(r'(?i).*' + re.escape(keyword.lower()) + r'.*(?:\n.*){1,50}', re.MULTILINE)
-                            matches = pattern.findall(analysis.lower())
-                            if matches:
-                                tab.warning(f"Section extraction failed, displaying raw text containing '{keyword}'")
-                                raw_text = "\n".join(matches)
-                                tab.text(raw_text)
-                                found_content = True
-                                break
+                with st.status("Analyzing against BIAN framework..."):
+                    analysis = generate_bian_analysis(use_case)
+                    st.write("Analysis complete")
                     
-                    if not found_content:
-                        tab.error(f"No {section_name} found in the response. Please try with a more detailed use case or select the enhancement option.")
-            
-            # Tab 1: Use Case Understanding
-            with tab1:
-                format_section_content(
-                    tab1, 
-                    "understanding analysis", 
-                    sections["UNDERSTANDING OF THE USE CASE"],
-                    ["understanding", "use case", "business objective", "process flow", "actors"]
-                )
-            
-            # Tab 2: BIAN Mapping
-            with tab2:
-                format_section_content(
-                    tab2, 
-                    "BIAN mapping", 
-                    sections["BIAN V12 MAPPING"],
-                    ["bian mapping", "service domain", "bian v12", "service domains"]
-                )
-            
-            # Tab 3: API Recommendations
-            with tab3:
-                col1, col2 = st.columns(2)
+                    # Debug: Save raw analysis to session state for debugging
+                    st.session_state.raw_analysis = analysis
+                    
+                    # Print response to debug
+                    print("RAW RESPONSE START")
+                    print(analysis[:500])  # First 500 chars
+                    print("...")
+                    print(analysis[-500:])  # Last 500 chars
+                    print("RAW RESPONSE END")
                 
-                with col1:
-                    format_section_content(
-                        col1, 
-                        "BIAN Semantic APIs", 
-                        sections["BIAN SEMANTIC APIS"],
-                        ["semantic api", "bian api", "standardized api"]
-                    )
+                # Display the analysis in tabs
+                tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+                    "Use Case Understanding", 
+                    "BIAN Mapping", 
+                    "API Recommendations", 
+                    "OpenAPI Spec",
+                    "Architecture",
+                    "Debug"
+                ])
                 
-                with col2:
-                    format_section_content(
-                        col2, 
-                        "API recommendations", 
-                        sections["RECOMMENDED APIS TO EXPOSE"],
-                        ["recommended api", "expose api", "solution api"]
-                    )
-            
-            # Tab 4: OpenAPI Spec
-            with tab4:
-                if sections["SWAGGER/OPENAPI SPECIFICATION"]:
-                    yaml_content = extract_yaml(sections["SWAGGER/OPENAPI SPECIFICATION"])
-                    st.code(yaml_content, language="yaml")
-                else:
-                    # Try to extract YAML directly from the full response
-                    yaml_content = extract_yaml(analysis)
-                    if yaml_content and yaml_content != "# No valid YAML found in the response":
-                        st.warning("Section extraction failed, but found OpenAPI specification in raw response")
-                        st.code(yaml_content, language="yaml")
+                # Extract sections with improved parsing
+                sections = extract_sections(analysis)
+                
+                # Debug: Store extracted sections in session state
+                st.session_state.extracted_sections = sections
+                
+                # Utility function to format raw text in case extraction failed
+                def format_section_content(tab, section_name, section_content, section_keywords):
+                    if section_content:
+                        tab.markdown(section_content)
                     else:
-                        st.error("No OpenAPI specification found in the response.")
-            
-            # Tab 5: Architecture
-            with tab5:
-                format_section_content(
-                    tab5, 
-                    "architecture flow", 
-                    sections["ARCHITECTURE FLOW"],
-                    ["architecture flow", "architecture diagram", "interaction flow", "service domain flow"]
-                )
-                
-                # Extract service domains and sequence for diagram only if we have architecture content
-                if sections["ARCHITECTURE FLOW"]:
-                    try:
-                        domains, sequence = extract_sequence(analysis)
-                        if domains:
-                            st.subheader("Architecture Diagram")
-                            img_buf = create_architecture_diagram(domains, sequence)
-                            st.image(img_buf, caption="Service Domain Interaction Flow")
-                    except Exception as e:
-                        st.error(f"Error generating diagram: {str(e)}")
-            
-            # Tab 6: Debug information
-            with tab6:
-                st.subheader("Debug Information")
-                st.write("This tab shows raw data for troubleshooting purposes")
-                
-                st.subheader("Section Detection Results")
-                for section_name, content in sections.items():
-                    st.write(f"Section: {section_name}")
-                    st.write(f"Content found: {'Yes' if content else 'No'}")
-                    if not content:
-                        st.write("Searching for patterns in raw response:")
-                        # Check if the section appears in any form in the raw response
-                        section_keywords = section_name.split()
+                        # Try to find the section in the raw response
+                        found_content = False
                         for keyword in section_keywords:
                             if keyword.lower() in analysis.lower():
-                                st.write(f"- Found keyword '{keyword}' in raw response")
+                                pattern = re.compile(r'(?i).*' + re.escape(keyword.lower()) + r'.*(?:\n.*){1,50}', re.MULTILINE)
+                                matches = pattern.findall(analysis.lower())
+                                if matches:
+                                    tab.warning(f"Section extraction failed, displaying raw text containing '{keyword}'")
+                                    raw_text = "\n".join(matches)
+                                    tab.text(raw_text)
+                                    found_content = True
+                                    break
+                        
+                        if not found_content:
+                            tab.error(f"No {section_name} found in the response. Please try with a more detailed use case or select the enhancement option.")
                 
-                st.subheader("First 500 chars of Raw Response")
-                st.text(analysis[:500] + "...")
+                # Tab 1: Use Case Understanding
+                with tab1:
+                    format_section_content(
+                        tab1, 
+                        "understanding analysis", 
+                        sections["UNDERSTANDING OF THE USE CASE"],
+                        ["understanding", "use case", "business objective", "process flow", "actors"]
+                    )
                 
-                st.subheader("Last 500 chars of Raw Response")
-                st.text("..." + analysis[-500:])
+                # Tab 2: BIAN Mapping
+                with tab2:
+                    format_section_content(
+                        tab2, 
+                        "BIAN mapping", 
+                        sections["BIAN V12 MAPPING"],
+                        ["bian mapping", "service domain", "bian v12", "service domains"]
+                    )
                 
-                st.subheader("Response Length")
-                st.write(f"Total characters: {len(analysis)}")
+                # Tab 3: API Recommendations
+                with tab3:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        format_section_content(
+                            col1, 
+                            "BIAN Semantic APIs", 
+                            sections["BIAN SEMANTIC APIS"],
+                            ["semantic api", "bian api", "standardized api"]
+                        )
+                    
+                    with col2:
+                        format_section_content(
+                            col2, 
+                            "API recommendations", 
+                            sections["RECOMMENDED APIS TO EXPOSE"],
+                            ["recommended api", "expose api", "solution api"]
+                        )
                 
-                st.subheader("Full Raw Response")
-                with st.expander("Show Full Response", expanded=False):
-                    st.text(analysis)
+                # Tab 4: OpenAPI Spec
+                with tab4:
+                    if sections["SWAGGER/OPENAPI SPECIFICATION"]:
+                        yaml_content = extract_yaml(sections["SWAGGER/OPENAPI SPECIFICATION"])
+                        st.code(yaml_content, language="yaml")
+                        
+                        # Store the YAML content in session state for API testing
+                        if yaml_content and yaml_content != "# No valid YAML found in the response":
+                            api_name = f"BIAN API - {time.strftime('%Y%m%d-%H%M%S')}"
+                            st.session_state.generated_apis.append({
+                                "name": api_name,
+                                "yaml": yaml_content,
+                                "timestamp": time.time()
+                            })
+                            
+                            # Add a button to proceed to testing
+                            st.success("OpenAPI specification generated successfully!")
+                            if st.button("Test this API"):
+                                st.session_state.current_api = len(st.session_state.generated_apis) - 1
+                                next_step()
+                    else:
+                        # Try to extract YAML directly from the full response
+                        yaml_content = extract_yaml(analysis)
+                        if yaml_content and yaml_content != "# No valid YAML found in the response":
+                            st.warning("Section extraction failed, but found OpenAPI specification in raw response")
+                            st.code(yaml_content, language="yaml")
+                            
+                            # Store the YAML content in session state for API testing
+                            api_name = f"BIAN API - {time.strftime('%Y%m%d-%H%M%S')}"
+                            st.session_state.generated_apis.append({
+                                "name": api_name,
+                                "yaml": yaml_content,
+                                "timestamp": time.time()
+                            })
+                            
+                            # Add a button to proceed to testing
+                            st.success("OpenAPI specification extracted from response!")
+                            if st.button("Test this API"):
+                                st.session_state.current_api = len(st.session_state.generated_apis) - 1
+                                next_step()
+                        else:
+                            st.error("No OpenAPI specification found in the response.")
                 
-        except Exception as e:
-            st.error(f"Error analyzing use case: {str(e)}")
-            st.exception(e)
+                # Tab 5: Architecture
+                with tab5:
+                    format_section_content(
+                        tab5, 
+                        "architecture flow", 
+                        sections["ARCHITECTURE FLOW"],
+                        ["architecture flow", "architecture diagram", "interaction flow", "service domain flow"]
+                    )
+                    
+                    # Extract service domains and sequence for diagram only if we have architecture content
+                    if sections["ARCHITECTURE FLOW"]:
+                        try:
+                            domains, sequence = extract_sequence(analysis)
+                            if domains:
+                                st.subheader("Architecture Diagram")
+                                img_buf = create_architecture_diagram(domains, sequence)
+                                st.image(img_buf, caption="Service Domain Interaction Flow")
+                        except Exception as e:
+                            st.error(f"Error generating diagram: {str(e)}")
+                
+                # Tab 6: Debug information
+                with tab6:
+                    st.subheader("Debug Information")
+                    st.write("This tab shows raw data for troubleshooting purposes")
+                    
+                    st.subheader("Section Detection Results")
+                    for section_name, content in sections.items():
+                        st.write(f"Section: {section_name}")
+                        st.write(f"Content found: {'Yes' if content else 'No'}")
+                        if not content:
+                            st.write("Searching for patterns in raw response:")
+                            # Check if the section appears in any form in the raw response
+                            section_keywords = section_name.split()
+                            for keyword in section_keywords:
+                                if keyword.lower() in analysis.lower():
+                                    st.write(f"- Found keyword '{keyword}' in raw response")
+                    
+                    st.subheader("First 500 chars of Raw Response")
+                    st.text(analysis[:500] + "...")
+                    
+                    st.subheader("Last 500 chars of Raw Response")
+                    st.text("..." + analysis[-500:])
+                    
+                    st.subheader("Response Length")
+                    st.write(f"Total characters: {len(analysis)}")
+                    
+                    st.subheader("Full Raw Response")
+                    with st.expander("Show Full Response", expanded=False):
+                        st.text(analysis)
+                
+            except Exception as e:
+                st.error(f"Error analyzing use case: {str(e)}")
+                st.exception(e)
+elif st.session_state.step == 2:
+    # Step 2: API Testing
+    st.subheader("API Testing Interface")
     
+    # Create two columns - one for API selection and one for API testing
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        st.markdown("### Select API to Test")
+        
+        # List the available API specs
+        if st.session_state.generated_apis:
+            api_options = [f"{api['name']} ({time.strftime('%H:%M:%S', time.localtime(api['timestamp']))})" for api in st.session_state.generated_apis]
+            selected_api_idx = st.selectbox("Available APIs:", 
+                                           options=range(len(api_options)),
+                                           format_func=lambda i: api_options[i],
+                                           index=st.session_state.current_api if st.session_state.current_api is not None else 0)
+            
+            st.session_state.current_api = selected_api_idx
+            current_api = st.session_state.generated_apis[selected_api_idx]
+            
+            st.markdown("### API Specification")
+            with st.expander("View OpenAPI Spec", expanded=False):
+                st.code(current_api["yaml"], language="yaml")
+            
+            # Button to deploy the API
+            if st.button("Deploy API for Testing"):
+                if st.session_state.api_deployment:
+                    # Stop any existing deployment
+                    stop_api(st.session_state.api_deployment)
+                
+                with st.spinner("Deploying API..."):
+                    # Generate FastAPI code from the YAML
+                    api_code = generate_fastapi_code(current_api["yaml"], current_api["name"])
+                    
+                    # Deploy the API
+                    port = 8000 + selected_api_idx  # Use different ports for different APIs
+                    deployment = deploy_api(api_code, port)
+                    
+                    if "error" in deployment:
+                        st.error(f"Failed to deploy API: {deployment['error']}")
+                    else:
+                        st.session_state.api_deployment = deployment
+                        st.success(f"API deployed successfully at http://localhost:{port}")
+            
+            # Display the documentation link
+            if st.session_state.api_deployment:
+                port = st.session_state.api_deployment["port"]
+                st.markdown(f"API Documentation: [Swagger UI](http://localhost:{port}/docs) | [ReDoc](http://localhost:{port}/redoc)")
+                
+                # Button to stop the API
+                if st.button("Stop API"):
+                    stop_api(st.session_state.api_deployment)
+                    st.session_state.api_deployment = None
+                    st.info("API stopped")
+            
+            # Go back button
+            if st.button("Back to Analysis"):
+                # Stop any running API
+                if st.session_state.api_deployment:
+                    stop_api(st.session_state.api_deployment)
+                    st.session_state.api_deployment = None
+                prev_step()
+        else:
+            st.warning("No APIs available for testing. Please analyze a use case first to generate an API specification.")
+            
+            # Go back button
+            if st.button("Back to Analysis"):
+                prev_step()
+    
+    with col2:
+        if st.session_state.api_deployment:
+            port = st.session_state.api_deployment["port"]
+            st.markdown("### API Endpoint Testing")
+            
+            # Extract endpoints from the OpenAPI spec
+            current_api = st.session_state.generated_apis[st.session_state.current_api]
+            endpoints = extract_endpoints_from_spec(current_api["yaml"])
+            
+            if endpoints:
+                endpoint_options = [f"{e['method']} {e['path']} - {e['summary']}" for e in endpoints]
+                selected_endpoint_idx = st.selectbox("Select Endpoint:", 
+                                                   options=range(len(endpoint_options)),
+                                                   format_func=lambda i: endpoint_options[i])
+                
+                selected_endpoint = endpoints[selected_endpoint_idx]
+                
+                # Display endpoint details
+                st.markdown(f"**Method:** {selected_endpoint['method']}")
+                st.markdown(f"**Path:** {selected_endpoint['path']}")
+                st.markdown(f"**Description:** {selected_endpoint['summary']}")
+                
+                # Build the URL with path parameters
+                url = f"http://localhost:{port}{selected_endpoint['path']}"
+                path_params = selected_endpoint.get('path_params', [])
+                
+                # Handle path parameters
+                if path_params:
+                    st.markdown("#### Path Parameters")
+                    path_param_values = {}
+                    
+                    for param in path_params:
+                        param_name = param['name']
+                        default_value = param.get('example', '1')
+                        path_param_values[param_name] = st.text_input(f"{param_name}:", value=default_value)
+                    
+                    # Replace path parameters in URL
+                    for param_name, param_value in path_param_values.items():
+                        url = url.replace(f"{{{param_name}}}", param_value)
+                
+                # Handle query parameters
+                query_params = selected_endpoint.get('query_params', [])
+                if query_params:
+                    st.markdown("#### Query Parameters")
+                    query_param_values = {}
+                    
+                    for param in query_params:
+                        param_name = param['name']
+                        default_value = param.get('example', '')
+                        required = param.get('required', False)
+                        label = f"{param_name}:" + (" (required)" if required else "")
+                        query_param_values[param_name] = st.text_input(label, value=default_value)
+                    
+                    # Add query parameters to URL
+                    query_string = "&".join([f"{k}={v}" for k, v in query_param_values.items() if v])
+                    if query_string:
+                        url += f"?{query_string}"
+                
+                # Handle request body
+                request_body = {}
+                if selected_endpoint['method'] in ['POST', 'PUT', 'PATCH'] and selected_endpoint.get('sample_body'):
+                    st.markdown("#### Request Body")
+                    
+                    # Convert the sample body to a formatted JSON string
+                    sample_body_str = json.dumps(selected_endpoint['sample_body'], indent=2)
+                    body_str = st.text_area("JSON Body:", value=sample_body_str, height=200)
+                    
+                    try:
+                        request_body = json.loads(body_str)
+                    except json.JSONDecodeError:
+                        st.error("Invalid JSON in request body")
+                        request_body = {}
+                
+                # Add a button to send the request
+                if st.button("Send Request"):
+                    with st.spinner("Sending request..."):
+                        method = selected_endpoint['method']
+                        response = test_api_endpoint(url, method, request_body)
+                        
+                        if "error" in response:
+                            st.error(f"Error: {response['error']}")
+                        else:
+                            st.markdown("#### Response")
+                            st.markdown(f"**Status Code:** {response['status_code']}")
+                            st.markdown(f"**Response Time:** {response['time']:.3f} seconds")
+                            
+                            st.markdown("**Response Headers:**")
+                            st.json(response['headers'])
+                            
+                            st.markdown("**Response Body:**")
+                            if isinstance(response['body'], dict) or isinstance(response['body'], list):
+                                st.json(response['body'])
+                            else:
+                                st.code(response['body'])
+            else:
+                st.warning("No endpoints found in the OpenAPI specification.")
+        else:
+            st.info("Deploy an API from the left panel to start testing endpoints.")
+
 # Instructions
 with st.expander("How to use this app"):
-    st.markdown("""
-    1. Enter your banking use case in the text area or select one of the examples
-    2. Choose whether to enhance your use case for better BIAN mapping (recommended)
-    3. Click "Analyze Use Case" to process it
-    4. View the analysis results in the different tabs:
-        - **Use Case Understanding**: Business objectives, actors, events, and process flow
-        - **BIAN Mapping**: Relevant BIAN Service Domains and their functions
-        - **API Recommendations**: BIAN Semantic APIs and APIs to expose
-        - **OpenAPI Spec**: Sample Swagger/OpenAPI specification
-        - **Architecture**: Flow of interactions between Service Domains
-        - **Debug**: Troubleshooting information if results are incomplete
-    
-    **Tip**: Providing detailed use cases with clear steps, actors, and banking processes will result in better BIAN mapping.
-    
-    **Note**: To use this app in Streamlit Cloud, you need to configure your OpenAI API key in the secrets manager.
-    """)
+    if st.session_state.step == 1:
+        st.markdown("""
+        1. Enter your banking use case in the text area or select one of the examples
+        2. Choose whether to enhance your use case for better BIAN mapping (recommended)
+        3. Click "Analyze Use Case" to process it
+        4. View the analysis results in the different tabs:
+            - **Use Case Understanding**: Business objectives, actors, events, and process flow
+            - **BIAN Mapping**: Relevant BIAN Service Domains and their functions
+            - **API Recommendations**: BIAN Semantic APIs and APIs to expose
+            - **OpenAPI Spec**: Sample Swagger/OpenAPI specification
+            - **Architecture**: Flow of interactions between Service Domains
+            - **Debug**: Troubleshooting information if results are incomplete
+        5. Click "Test this API" in the OpenAPI Spec tab to move to API testing
+        
+        **Tip**: Providing detailed use cases with clear steps, actors, and banking processes will result in better BIAN mapping.
+        
+        **Note**: To use this app in Streamlit Cloud, you need to configure your OpenAI API key in the secrets manager.
+        """)
+    elif st.session_state.step == 2:
+        st.markdown("""
+        1. Select an API from the list of generated specifications
+        2. Click "Deploy API for Testing" to create a local server with the API
+        3. Select an endpoint to test from the dropdown menu
+        4. Fill in any required parameters or modify the request body
+        5. Click "Send Request" to test the endpoint and view the response
+        6. Click "Stop API" when done testing to shut down the server
+        7. Click "Back to Analysis" to return to the use case analysis screen
+        
+        **Note**: The API is deployed locally on your machine and is available only while this app is running.
+        
+        **Tip**: You can view the API documentation by clicking on the Swagger UI or ReDoc links after deployment.
+        """)
 
 # Footer
 st.markdown("---")
