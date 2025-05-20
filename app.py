@@ -8,7 +8,7 @@ import math
 from openai import OpenAI
 
 # Configure OpenAI API with the new client
-client = OpenAI(api_key=st.secrets["openai"]["api_key"])
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 st.set_page_config(
     page_title="GTC - BIAN Use Case Analyzer",
