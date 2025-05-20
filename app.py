@@ -171,14 +171,70 @@ def generate_openapi_from_recommendations(recommendations_text):
     """
     Generate a valid OpenAPI specification from the recommended APIs section.
     """
-    # Extract endpoints using regex
-    endpoint_pattern = re.compile(r'Endpoint:\s*(\/[^\n]*)', re.IGNORECASE)
-    method_pattern = re.compile(r'Method:\s*([A-Z]+)', re.IGNORECASE)
-    purpose_pattern = re.compile(r'Purpose:\s*([^\n]*)', re.IGNORECASE)
+    # Extract endpoints using regex - supporting various formats including numbered lists
+    endpoint_patterns = [
+        re.compile(r'Endpoint:\s*(\/[^\n]*)', re.IGNORECASE),  # Standard format
+        re.compile(r'\d+\.\s*Endpoint:\s*(\/[^\n]*)', re.IGNORECASE),  # Numbered list format
+        re.compile(r'o\s*Endpoint:\s*(\/[^\n]*)', re.IGNORECASE),  # Bullet point format
+        re.compile(r'\n\s*-\s*Endpoint:\s*(\/[^\n]*)', re.IGNORECASE)  # Dash bullet format
+    ]
     
-    endpoints = endpoint_pattern.findall(recommendations_text)
-    methods = method_pattern.findall(recommendations_text)
-    purposes = purpose_pattern.findall(recommendations_text)
+    method_patterns = [
+        re.compile(r'Method:\s*([A-Z]+)', re.IGNORECASE),  # Standard format
+        re.compile(r'o\s*Method:\s*([A-Z]+)', re.IGNORECASE),  # Bullet point format
+        re.compile(r'\n\s*-\s*Method:\s*([A-Z]+)', re.IGNORECASE)  # Dash bullet format
+    ]
+    
+    purpose_patterns = [
+        re.compile(r'Purpose:\s*([^\n]*)', re.IGNORECASE),  # Standard format
+        re.compile(r'o\s*Purpose:\s*([^\n]*)', re.IGNORECASE),  # Bullet point format
+        re.compile(r'\n\s*-\s*Purpose:\s*([^\n]*)', re.IGNORECASE)  # Dash bullet format
+    ]
+    
+    security_patterns = [
+        re.compile(r'Security:\s*([^\n]*)', re.IGNORECASE),
+        re.compile(r'o\s*Security:\s*([^\n]*)', re.IGNORECASE),
+        re.compile(r'\n\s*-\s*Security:\s*([^\n]*)', re.IGNORECASE)
+    ]
+    
+    error_handling_patterns = [
+        re.compile(r'Error\s*Handling:\s*([^\n]*)', re.IGNORECASE),
+        re.compile(r'o\s*Error\s*Handling:\s*([^\n]*)', re.IGNORECASE),
+        re.compile(r'\n\s*-\s*Error\s*Handling:\s*([^\n]*)', re.IGNORECASE)
+    ]
+    
+    # Collect all matches from each pattern
+    endpoints = []
+    for pattern in endpoint_patterns:
+        endpoints.extend(pattern.findall(recommendations_text))
+    
+    methods = []
+    for pattern in method_patterns:
+        methods.extend(pattern.findall(recommendations_text))
+    
+    purposes = []
+    for pattern in purpose_patterns:
+        purposes.extend(pattern.findall(recommendations_text))
+    
+    security_info = []
+    for pattern in security_patterns:
+        security_info.extend(pattern.findall(recommendations_text))
+    
+    error_handling = []
+    for pattern in error_handling_patterns:
+        error_handling.extend(pattern.findall(recommendations_text))
+    
+    # Check if we found any endpoints, if not try to extract from numbered list items
+    if not endpoints:
+        # Try to extract endpoint information from numbered list items
+        list_item_pattern = re.compile(r'\d+\.\s*(\/[a-zA-Z0-9\/\-_]+)\s*-\s*([A-Z]+)\s*-\s*([^\n]*)', re.IGNORECASE)
+        list_items = list_item_pattern.findall(recommendations_text)
+        
+        for item in list_items:
+            if len(item) >= 3:
+                endpoints.append(item[0])
+                methods.append(item[1])
+                purposes.append(item[2])
     
     # Create a basic OpenAPI spec
     openapi_spec = {
@@ -237,6 +293,11 @@ def generate_openapi_from_recommendations(recommendations_text):
                             }
                         }
                     }
+                },
+                "BearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "bearerFormat": "JWT"
                 }
             }
         }
@@ -405,6 +466,124 @@ def generate_openapi_from_recommendations(recommendations_text):
             }
         }
     
+    # Add specific schemas for credit card dispute if mentioned
+    if any("dispute" in endpoint.lower() or "creditcard" in endpoint.lower().replace(" ", "") for endpoint in endpoints):
+        openapi_spec["components"]["schemas"]["DisputeRequest"] = {
+            "type": "object",
+            "properties": {
+                "customerId": {
+                    "type": "string",
+                    "example": "CUST123456"
+                },
+                "accountId": {
+                    "type": "string",
+                    "example": "ACCT789012"
+                },
+                "cardId": {
+                    "type": "string",
+                    "example": "CARD123456"
+                },
+                "transactionId": {
+                    "type": "string",
+                    "example": "TXN987654"
+                },
+                "transactionDate": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2023-06-15"
+                },
+                "transactionAmount": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 250.00
+                },
+                "merchantName": {
+                    "type": "string",
+                    "example": "Online Store Inc."
+                },
+                "disputeReason": {
+                    "type": "string",
+                    "example": "Not authorized",
+                    "enum": ["Not authorized", "Item not received", "Duplicate charge", "Incorrect amount", "Other"]
+                },
+                "disputeDescription": {
+                    "type": "string",
+                    "example": "I did not make this purchase."
+                },
+                "attachments": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "format": "binary"
+                    },
+                    "description": "Supporting documents"
+                }
+            },
+            "required": ["customerId", "accountId", "transactionId", "disputeReason"]
+        }
+        
+        openapi_spec["components"]["schemas"]["DisputeResponse"] = {
+            "type": "object",
+            "properties": {
+                "disputeId": {
+                    "type": "string",
+                    "example": "DISP123456"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "CREATED",
+                    "enum": ["CREATED", "UNDER_REVIEW", "PROVISIONAL_CREDIT_APPLIED", "RESOLVED_APPROVED", "RESOLVED_DENIED"]
+                },
+                "creationDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-06-16T10:30:00Z"
+                },
+                "referenceNumber": {
+                    "type": "string",
+                    "example": "REF987654321"
+                },
+                "provisionalCreditAmount": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 250.00
+                },
+                "estimatedResolutionDate": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2023-07-16"
+                }
+            }
+        }
+        
+        openapi_spec["components"]["schemas"]["DisputeStatus"] = {
+            "type": "object",
+            "properties": {
+                "disputeId": {
+                    "type": "string",
+                    "example": "DISP123456"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "UNDER_REVIEW",
+                    "enum": ["CREATED", "UNDER_REVIEW", "PROVISIONAL_CREDIT_APPLIED", "RESOLVED_APPROVED", "RESOLVED_DENIED"]
+                },
+                "lastUpdated": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-06-18T14:45:00Z"
+                },
+                "statusDescription": {
+                    "type": "string",
+                    "example": "Your dispute is currently being investigated."
+                },
+                "nextSteps": {
+                    "type": "string",
+                    "example": "We will contact the merchant for more information."
+                }
+            }
+        }
+    
     # Add the endpoints to the spec
     for i, endpoint in enumerate(endpoints):
         if i < len(methods):
@@ -413,7 +592,7 @@ def generate_openapi_from_recommendations(recommendations_text):
             method = "post"  # Default to POST if method not specified
             
         if i < len(purposes):
-            description = purposes[i]
+            description = purposes[i].strip()
         else:
             description = f"API endpoint for {endpoint}"
             
@@ -457,6 +636,18 @@ def generate_openapi_from_recommendations(recommendations_text):
                 }
             }
         }
+        
+        # Determine security based on the security info
+        security = []
+        if security_info and i < len(security_info):
+            sec_info = security_info[i].lower()
+            if "oauth" in sec_info:
+                security = [{"OAuth2": ["read", "write"]}]
+            elif "authentication" in sec_info or "auth" in sec_info:
+                security = [{"BearerAuth": []}]
+        else:
+            # Default to Bearer Auth
+            security = [{"BearerAuth": []}]
         
         # Customize request/response based on endpoint
         if "loan" in endpoint_path.lower():
@@ -610,13 +801,51 @@ def generate_openapi_from_recommendations(recommendations_text):
                         }
                     }
                 }
+        elif "dispute" in endpoint_path.lower() or "creditcard" in endpoint_path.lower().replace(" ", ""):
+            if method == "post":
+                request_body = {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DisputeRequest"
+                            }
+                        }
+                    },
+                    "required": True
+                }
+                responses["200"]["content"]["application/json"]["schema"] = {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "example": "success"
+                        },
+                        "dispute": {
+                            "$ref": "#/components/schemas/DisputeResponse"
+                        }
+                    }
+                }
+            elif method == "get":
+                # For GET, assume it's a status lookup
+                responses["200"]["content"]["application/json"]["schema"] = {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "example": "success"
+                        },
+                        "dispute": {
+                            "$ref": "#/components/schemas/DisputeStatus"
+                        }
+                    }
+                }
         
         # Add the method to the path
         openapi_spec["paths"][endpoint_path][method] = {
             "summary": description,
             "description": description,
             "operationId": f"{method}_{endpoint_path.replace('/', '_').replace('-', '_').replace('{', '').replace('}', '')}",
-            "security": [{"OAuth2": ["read", "write"]}],
+            "security": security,
             "responses": responses
         }
         
@@ -1616,46 +1845,46 @@ if st.session_state.step == 1:
                 
                 # Tab 4: OpenAPI Spec
                 with tab4:
+                    # First try to extract from the OpenAPI specification section
+                    yaml_from_section = ""
                     if sections["SWAGGER/OPENAPI SPECIFICATION"]:
-                        yaml_content = extract_yaml(sections["SWAGGER/OPENAPI SPECIFICATION"])
-                        st.code(yaml_content, language="yaml")
-                        
-                        # Store the YAML content in session state for API testing
-                        if yaml_content and yaml_content != "# No valid YAML found in the response":
-                            api_name = f"BIAN API - {time.strftime('%Y%m%d-%H%M%S')}"
-                            st.session_state.generated_apis.append({
-                                "name": api_name,
-                                "yaml": yaml_content,
-                                "timestamp": time.time()
-                            })
-                            
-                            # Add a button to proceed to testing
-                            st.success("OpenAPI specification generated successfully!")
-                            if st.button("Test this API"):
-                                st.session_state.current_api = len(st.session_state.generated_apis) - 1
-                                next_step()
-                    else:
-                        # Try to extract YAML directly from the full response
+                        yaml_from_section = extract_yaml(sections["SWAGGER/OPENAPI SPECIFICATION"])
+                    
+                    # If no valid YAML from section, try to extract from the entire response
+                    if not yaml_from_section or yaml_from_section == "# No valid YAML found in the response":
                         yaml_content = extract_yaml(analysis)
                         if yaml_content and yaml_content != "# No valid YAML found in the response":
-                            st.warning("Section extraction failed, but found OpenAPI specification in raw response")
-                            st.code(yaml_content, language="yaml")
-                            
-                            # Store the YAML content in session state for API testing
-                            api_name = f"BIAN API - {time.strftime('%Y%m%d-%H%M%S')}"
-                            st.session_state.generated_apis.append({
-                                "name": api_name,
-                                "yaml": yaml_content,
-                                "timestamp": time.time()
-                            })
-                            
-                            # Add a button to proceed to testing
-                            st.success("OpenAPI specification extracted from response!")
-                            if st.button("Test this API"):
-                                st.session_state.current_api = len(st.session_state.generated_apis) - 1
-                                next_step()
+                            st.info("Generated OpenAPI specification from the recommended APIs")
                         else:
-                            st.error("No OpenAPI specification found in the response.")
+                            # Try to generate from the Recommended APIs section
+                            if sections["RECOMMENDED APIS TO EXPOSE"]:
+                                yaml_content = generate_openapi_from_recommendations(sections["RECOMMENDED APIS TO EXPOSE"])
+                                st.info("Generated OpenAPI specification from the recommended APIs")
+                            else:
+                                yaml_content = "# No valid OpenAPI specification could be generated"
+                                st.error("Could not generate OpenAPI specification. No API recommendations found.")
+                    else:
+                        yaml_content = yaml_from_section
+                        st.success("OpenAPI specification extracted successfully!")
+                    
+                    # Display the YAML content
+                    st.code(yaml_content, language="yaml")
+                    
+                    # Store the YAML content and show testing button if valid
+                    if yaml_content and yaml_content != "# No valid OpenAPI specification could be generated" and yaml_content != "# No valid YAML found in the response":
+                        # Store in session state for API testing
+                        api_name = f"BIAN API - {time.strftime('%Y%m%d-%H%M%S')}"
+                        st.session_state.generated_apis.append({
+                            "name": api_name,
+                            "yaml": yaml_content,
+                            "timestamp": time.time()
+                        })
+                        
+                        # Add a button to proceed to testing
+                        st.success("API ready for testing!")
+                        if st.button("Test this API"):
+                            st.session_state.current_api = len(st.session_state.generated_apis) - 1
+                            next_step()
                 
                 # Tab 5: Architecture
                 with tab5:
