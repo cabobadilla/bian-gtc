@@ -8,7 +8,7 @@ import textwrap
 import math
 import openai
 
-# Configure OpenAI API with a more compatible approach
+# Configure OpenAI API with a more compatible approach for version 0.28.1
 # First try to get from streamlit secrets
 api_key = None
 try:
@@ -21,8 +21,8 @@ if not api_key:
     st.error("OpenAI API key not found. Please add it to Streamlit secrets or set the OPENAI_API_KEY environment variable.")
     st.stop()
 
-# Set the API key directly using environment variable
-os.environ["OPENAI_API_KEY"] = api_key
+# Set the API key for openai 0.28.1
+openai.api_key = api_key
 
 st.set_page_config(
     page_title="GTC - BIAN Use Case Analyzer",
@@ -78,8 +78,8 @@ def generate_bian_analysis(use_case):
     For the Swagger/OpenAPI specification, ensure it's properly formatted as YAML.
     """
     
-    # Use the openai library directly
-    response = openai.chat.completions.create(
+    # Using the older API style for openai 0.28.1
+    response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "You are a BIAN architecture expert helping analyze banking use cases."},
