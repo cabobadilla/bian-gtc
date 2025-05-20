@@ -68,129 +68,43 @@ st.markdown("This tool analyzes banking use cases and maps them to BIAN Service 
 EXAMPLE_USE_CASES = {
     "Personal Loan Application": """
 Personal Loan Application Process:
-
-1. Customer logs into the bank's mobile app using their credentials and navigates to the loan products section.
-2. System displays various loan options including personal loans, mortgages, and auto loans.
-3. Customer selects a personal loan product and enters their desired loan amount ($10,000) and preferred term (36 months).
-4. System pre-fills the application form with the customer's existing information from their profile (name, address, contact details, ID number).
-5. Customer provides additional required information:
-   - Monthly income: $5,000
-   - Employment details: Company name, position, years employed
-   - Purpose of loan: Home renovation
-   - Existing financial obligations: Other loans, credit cards
-6. System performs real-time credit check by calling the credit bureau service and calculates affordability based on income vs. expenses ratio.
-7. Based on the customer's credit score (720) and affordability assessment, the system generates a loan offer with:
-   - Interest rate: 8.5% APR
-   - Monthly payment: $315
-   - Term: 36 months
-   - Total repayment amount: $11,340
-8. Customer reviews all terms and conditions and accepts the offer by clicking "Accept".
-9. System generates a digital loan agreement that requires customer's electronic signature.
-10. Customer digitally signs the agreement using a one-time password sent to their registered mobile number.
-11. Loan servicing system processes the application and initiates the disbursement workflow.
-12. Funds are disbursed to the customer's designated checking account within 24 hours.
-13. Loan account is created in the core banking system with repayment schedule.
-14. Customer receives confirmation notification with loan details and first payment date.
-15. Repayment schedule is established with automatic monthly debits from customer's checking account.
+1. Customer logs into mobile app and navigates to loan products.
+2. Customer selects personal loan ($10,000, 36 months).
+3. System pre-fills application with customer profile data.
+4. Customer provides income ($5,000), employment details, purpose (renovation), and existing obligations.
+5. System performs credit check and affordability assessment.
+6. System generates loan offer (8.5% APR, $315 monthly, 36 months).
+7. Customer accepts terms and digitally signs.
+8. Funds are disbursed to customer's account within 24 hours.
+9. Loan account created with automatic monthly payment schedule.
     """,
     
     "Credit Card Dispute": """
-Credit Card Dispute Handling Process:
-
-1. Customer logs into their mobile banking app and reviews their credit card statement.
-2. Customer identifies an unauthorized transaction for $250 at an online merchant they don't recognize.
-3. Customer navigates to the "Dispute Transaction" feature in the app and selects the specific transaction.
-4. Customer provides reason for dispute: "I did not authorize this transaction" and provides additional details: "I have never shopped at this merchant."
-5. System validates the dispute eligibility based on:
-   - Transaction date (within 60 days)
-   - Transaction type (eligible for dispute)
-   - Customer's dispute history (no previous suspicious patterns)
-6. System creates a dispute case in the Card Dispute Management System with a unique reference number (DIS-2023-45678).
-7. Fraud Detection System analyzes the transaction using AI algorithms to check for:
-   - Transaction pattern anomalies
-   - Geographical irregularities
-   - Merchant risk profile
-8. Based on initial fraud assessment, a provisional credit of $250 is applied to the customer's account within 24 hours.
-9. Customer receives notification confirming the dispute has been registered and provisional credit applied.
-10. Bank's dispute resolution team initiates investigation by:
-    - Contacting the merchant for transaction evidence
-    - Requesting additional information from the card network (Visa/Mastercard)
-    - Reviewing transaction logs and authorization data
-11. Merchant responds with transaction evidence including IP address, shipping address, and purchase details.
-12. Bank compares evidence against customer information and determines the transaction was indeed fraudulent.
-13. Dispute resolution team makes final decision: "Dispute approved in favor of customer".
-14. The provisional credit is made permanent in the customer's account.
-15. Customer is notified of the decision via app notification, email, and SMS.
-16. Case is documented in the compliance system for regulatory reporting.
-17. Fraud pattern is logged in the fraud detection database to improve future fraud prevention.
+Credit Card Dispute Handling:
+1. Customer identifies unauthorized transaction ($250) in mobile app.
+2. Customer submits dispute with reason "Not authorized".
+3. System validates dispute eligibility (within 60 days).
+4. System creates dispute case with reference number.
+5. Fraud detection analyzes transaction patterns.
+6. Provisional credit applied to customer's account.
+7. Bank investigates by contacting merchant and reviewing logs.
+8. Bank determines transaction was fraudulent.
+9. Provisional credit is made permanent.
+10. Customer is notified of decision.
     """,
     
     "Account Opening": """
-Digital Account Opening Process:
-
-1. Prospect downloads the bank's mobile app from the App Store/Google Play Store and launches it.
-2. System presents various banking products and services available to new customers.
-3. Prospect selects "Open New Account" and chooses "Premium Checking Account" from the account options.
-4. System displays the account features, benefits, fees, and requirements:
-   - Monthly fee: $25 (waived with $5,000 minimum balance)
-   - Interest rate: 0.25% APY
-   - Unlimited transactions
-   - Premium debit card with rewards
-   - Free international wire transfers
-5. Prospect confirms interest in proceeding with application.
-6. System creates a new customer profile and requests personal information:
-   - Full legal name: John Michael Smith
-   - Date of birth: 05/12/1985
-   - Social Security Number: XXX-XX-1234
-   - Address: 123 Main Street, Apt 4B, New York, NY 10001
-   - Email: john.smith@email.com
-   - Phone: (212) 555-7890
-7. Prospect uploads identification documents through the app:
-   - Driver's license (front and back)
-   - Utility bill for address verification
-8. System performs real-time identity verification using:
-   - Document authentication (checking for security features)
-   - Facial recognition (comparing selfie to ID photo)
-   - Liveness detection (ensuring the person is physically present)
-9. Know Your Customer (KYC) checks are performed:
-   - Identity verification against government databases
-   - OFAC sanctions screening
-   - PEP (Politically Exposed Person) screening
-10. Anti-Money Laundering (AML) risk assessment is conducted based on:
-    - Customer risk profile
-    - Geographic risk
-    - Transaction risk
-11. Customer completes a questionnaire about:
-    - Employment status: Full-time employee at ABC Corporation
-    - Income range: $75,000-$100,000 annually
-    - Source of funds: Salary
-    - Expected account activity: Direct deposit, bill payments, daily purchases
-12. System performs credit check with customer's authorization.
-13. Customer selects account preferences:
-    - Paper or electronic statements (selects electronic)
-    - Overdraft protection options (opts in)
-    - Debit card design (selects premium design)
-14. Customer reviews and accepts terms and conditions and privacy policy by checking boxes and providing electronic signature.
-15. System generates a new account number: 123456789012
-16. Customer sets up online banking credentials:
-    - Username
-    - Password
-    - Security questions
-    - Biometric authentication
-17. Customer makes initial deposit of $2,500 via:
-    - ACH transfer from external bank
-    - Debit card
-    - Mobile check deposit
-18. System generates and displays account opening confirmation with account details.
-19. Welcome package is prepared for shipping to customer's address, including:
-    - Personalized debit card
-    - Checkbook (if requested)
-    - Welcome letter
-20. Customer receives follow-up communication:
-    - Email confirmation
-    - Mobile app notification
-    - SMS with activation instructions for debit card
-21. Account is fully activated after customer receives and activates debit card.
+Digital Account Opening:
+1. Prospect selects "Premium Checking Account" in mobile app.
+2. System displays account features and requirements.
+3. Customer provides personal information and ID documents.
+4. System performs identity verification, KYC, and AML checks.
+5. Customer completes questionnaire about income, employment, and expected account use.
+6. Customer sets preferences and accepts terms.
+7. System generates account number and credentials.
+8. Customer makes initial deposit ($2,500).
+9. Welcome package prepared with debit card.
+10. Account activated after customer receives and activates card.
     """
 }
 
@@ -301,7 +215,7 @@ def generate_bian_analysis(use_case):
             {"role": "user", "content": prompt}
         ],
         temperature=0.2,  # Lower temperature for more focused responses
-        max_tokens=10000  # Allow for detailed analysis
+        max_tokens=4000  # Reduced from 10000 to stay within model limits
     )
     
     return response.choices[0].message.content
