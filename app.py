@@ -42,7 +42,7 @@ except (ImportError, TypeError):
         return response.choices[0].message.content
 
 st.set_page_config(
-    page_title="BIAN Use Case Analyzer",
+    page_title="GTC - BIAN Use Case Analyzer",
     page_icon="🏦",
     layout="wide"
 )
