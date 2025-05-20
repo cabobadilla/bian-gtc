@@ -7,6 +7,7 @@ import base64
 import textwrap
 import math
 import openai
+import re
 
 # Configure OpenAI API with a more compatible approach for version 0.28.1
 # First try to get from streamlit secrets
@@ -48,7 +49,7 @@ def generate_bian_analysis(use_case):
     USE CASE:
     {use_case}
     
-    Please provide the following analysis:
+    Please provide the following analysis, being as specific and detailed as possible:
     
     1. UNDERSTANDING OF THE USE CASE:
     - Business objectives
@@ -57,32 +58,56 @@ def generate_bian_analysis(use_case):
     - Main process flow
     
     2. BIAN V12 MAPPING:
-    - Identify relevant BIAN Service Domains (SDs)
-    - Brief description of each SD's function
+    - Identify all relevant BIAN Service Domains (SDs) for the use case
+    - Include the complete name of each SD (e.g., "Customer Offer SD", "Consumer Loan SD")
+    - Provide a brief description of each SD's function
+    - Explain how each SD relates to the specific parts of the use case
     
     3. BIAN SEMANTIC APIS:
-    - Standardized APIs corresponding to identified Service Domains
-    - Appropriate endpoints and operations (Initiate, Retrieve, Execute, Notify, etc.)
+    - List the standardized APIs corresponding to each identified Service Domain
+    - Specify the appropriate endpoint patterns (/SD/behavior/action)
+    - Include recommended operations (Initiate, Execute, Request, Retrieve, Notify) for each API
+    - Mention the purpose of each API in the context of this use case
     
     4. RECOMMENDED APIS TO EXPOSE:
-    - APIs the solution should expose
-    - Operation types, endpoint structures, and main parameters
+    - Suggest specific APIs the solution should expose to implement the use case
+    - Include operation types, URI patterns, and main parameters for each API
+    - Explain how these APIs would be used in the flow of the use case
     
     5. SWAGGER/OPENAPI SPECIFICATION:
-    - YAML block with suggested endpoints (simple example)
+    - Provide a YAML block with suggested endpoints for at least one key API
+    - Include paths, operations, parameters, and response structures
+    - Format it correctly as a valid OpenAPI specification
     
     6. ARCHITECTURE FLOW:
-    - Logical sequence of interactions between Service Domains
+    - Describe the logical sequence of interactions between Service Domains
+    - Include the operations that would be called between SDs
+    - Explain the data that would flow between the different SDs
     
-    Provide the response in a well-structured format with clear headings and sections.
-    For the Swagger/OpenAPI specification, ensure it's properly formatted as YAML.
+    Use clear section headings and proper formatting. For any section where there isn't enough information, provide recommendations based on BIAN best practices.
+    
+    The BIAN Service Domains should come from the standard BIAN v12 framework, which includes domains like:
+    - Party Reference
+    - Customer Agreement
+    - Customer Offer
+    - Consumer Loan
+    - Current Account
+    - Payment Order
+    - Card Authorization
+    - Fraud Detection
+    - Customer Credit Rating
+    - Point of Service
+    - Product Design
+    - Customer Product/Service Eligibility
+    
+    For the Swagger/OpenAPI specification, ensure it's properly formatted as valid YAML.
     """
     
     # Using the older API style for openai 0.28.1
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
-            {"role": "system", "content": "You are a BIAN architecture expert helping analyze banking use cases."},
+            {"role": "system", "content": "You are a BIAN architecture expert with deep knowledge of the BIAN v12 framework, Service Domains, and API patterns."},
             {"role": "user", "content": prompt}
         ],
         temperature=0.7,
@@ -187,7 +212,6 @@ def extract_yaml(text):
                 return blocks[i].strip()
     
     # Fallback: try to extract anything that looks like YAML
-    import re
     yaml_pattern = r'openapi:.*?paths:.*?components:'
     match = re.search(yaml_pattern, text, re.DOTALL)
     if match:
@@ -205,7 +229,6 @@ def extract_sequence(text):
     if "BIAN V12 MAPPING" in text:
         mapping_section = text.split("BIAN V12 MAPPING")[1].split("BIAN SEMANTIC APIS")[0]
         # Extract service domains from bullet points
-        import re
         domains = re.findall(r'[-•]\s*(\w+(?:\s+\w+)*)\s*Service\s*Domain', mapping_section)
     
     if "ARCHITECTURE FLOW" in text:
@@ -214,6 +237,79 @@ def extract_sequence(text):
         sequence = domains  # In a real implementation, parse the actual sequence
     
     return domains, sequence
+
+def extract_sections(analysis_text):
+    """Extract sections from the analysis with improved parsing"""
+    sections = {}
+    
+    # Define section patterns with multiple variations
+    section_patterns = {
+        "UNDERSTANDING OF THE USE CASE": [
+            r"(?i)(?:1\.\s*)?UNDERSTANDING\s+OF\s+THE\s+USE\s+CASE\s*:?",
+            r"(?i)(?:1\.\s*)?USE\s+CASE\s+UNDERSTANDING\s*:?"
+        ],
+        "BIAN V12 MAPPING": [
+            r"(?i)(?:2\.\s*)?BIAN\s+V12\s+MAPPING\s*:?",
+            r"(?i)(?:2\.\s*)?BIAN\s+MAPPING\s*:?",
+            r"(?i)(?:2\.\s*)?MAPPING\s+TO\s+BIAN\s*:?"
+        ],
+        "BIAN SEMANTIC APIS": [
+            r"(?i)(?:3\.\s*)?BIAN\s+SEMANTIC\s+APIS\s*:?",
+            r"(?i)(?:3\.\s*)?SEMANTIC\s+APIS\s*:?"
+        ],
+        "RECOMMENDED APIS TO EXPOSE": [
+            r"(?i)(?:4\.\s*)?RECOMMENDED\s+APIS\s+TO\s+EXPOSE\s*:?",
+            r"(?i)(?:4\.\s*)?APIS\s+TO\s+EXPOSE\s*:?"
+        ],
+        "SWAGGER/OPENAPI SPECIFICATION": [
+            r"(?i)(?:5\.\s*)?SWAGGER\/OPENAPI\s+SPECIFICATION\s*:?",
+            r"(?i)(?:5\.\s*)?OPENAPI\s+SPECIFICATION\s*:?",
+            r"(?i)(?:5\.\s*)?SWAGGER\s+SPECIFICATION\s*:?"
+        ],
+        "ARCHITECTURE FLOW": [
+            r"(?i)(?:6\.\s*)?ARCHITECTURE\s+FLOW\s*:?",
+            r"(?i)(?:6\.\s*)?FLOW\s+ARCHITECTURE\s*:?",
+            r"(?i)(?:6\.\s*)?SERVICE\s+DOMAIN\s+FLOW\s*:?"
+        ]
+    }
+    
+    # Initialize sections dict with empty content
+    for section_name in section_patterns:
+        sections[section_name] = ""
+    
+    # Split the text into lines
+    lines = analysis_text.split('\n')
+    
+    current_section = None
+    section_content = []
+    
+    for line in lines:
+        # Check if this line starts a new section
+        new_section_found = False
+        for section_name, patterns in section_patterns.items():
+            for pattern in patterns:
+                if re.match(pattern, line.strip()):
+                    # If we were building a previous section, save it
+                    if current_section:
+                        sections[current_section] = '\n'.join(section_content).strip()
+                    
+                    # Start a new section
+                    current_section = section_name
+                    section_content = []
+                    new_section_found = True
+                    break
+            if new_section_found:
+                break
+        
+        # If this line doesn't start a new section, add it to the current section
+        if not new_section_found and current_section:
+            section_content.append(line)
+    
+    # Add the last section
+    if current_section and section_content:
+        sections[current_section] = '\n'.join(section_content).strip()
+    
+    return sections
 
 # Main app logic
 if submit_button and use_case:
@@ -230,38 +326,19 @@ if submit_button and use_case:
                 "Architecture"
             ])
             
-            # Use regex or string splitting to separate sections
-            sections = {}
-            current_section = None
-            
-            for line in analysis.split('\n'):
-                if line.strip().upper() in [
-                    "UNDERSTANDING OF THE USE CASE:", "1. UNDERSTANDING OF THE USE CASE:",
-                    "BIAN V12 MAPPING:", "2. BIAN V12 MAPPING:", 
-                    "BIAN SEMANTIC APIS:", "3. BIAN SEMANTIC APIS:",
-                    "RECOMMENDED APIS TO EXPOSE:", "4. RECOMMENDED APIS TO EXPOSE:",
-                    "SWAGGER/OPENAPI SPECIFICATION:", "5. SWAGGER/OPENAPI SPECIFICATION:",
-                    "ARCHITECTURE FLOW:", "6. ARCHITECTURE FLOW:"
-                ]:
-                    current_section = line.strip().upper().replace("1. ", "").replace("2. ", "").replace("3. ", "").replace("4. ", "").replace("5. ", "").replace("6. ", "").rstrip(":")
-                    sections[current_section] = []
-                elif current_section:
-                    sections[current_section].append(line)
-            
-            # Process sections into formatted content
-            for section, content in sections.items():
-                sections[section] = "\n".join(content).strip()
+            # Extract sections with improved parsing
+            sections = extract_sections(analysis)
             
             # Tab 1: Use Case Understanding
             with tab1:
-                if "UNDERSTANDING OF THE USE CASE" in sections:
+                if sections["UNDERSTANDING OF THE USE CASE"]:
                     st.markdown(sections["UNDERSTANDING OF THE USE CASE"])
                 else:
                     st.write("No understanding analysis found in the response.")
             
             # Tab 2: BIAN Mapping
             with tab2:
-                if "BIAN V12 MAPPING" in sections:
+                if sections["BIAN V12 MAPPING"]:
                     st.markdown(sections["BIAN V12 MAPPING"])
                 else:
                     st.write("No BIAN mapping found in the response.")
@@ -271,14 +348,14 @@ if submit_button and use_case:
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    if "BIAN SEMANTIC APIS" in sections:
+                    if sections["BIAN SEMANTIC APIS"]:
                         st.subheader("BIAN Semantic APIs")
                         st.markdown(sections["BIAN SEMANTIC APIS"])
                     else:
                         st.write("No BIAN Semantic APIs found in the response.")
                 
                 with col2:
-                    if "RECOMMENDED APIS TO EXPOSE" in sections:
+                    if sections["RECOMMENDED APIS TO EXPOSE"]:
                         st.subheader("Recommended APIs to Expose")
                         st.markdown(sections["RECOMMENDED APIS TO EXPOSE"])
                     else:
@@ -286,7 +363,7 @@ if submit_button and use_case:
             
             # Tab 4: OpenAPI Spec
             with tab4:
-                if "SWAGGER/OPENAPI SPECIFICATION" in sections:
+                if sections["SWAGGER/OPENAPI SPECIFICATION"]:
                     yaml_content = extract_yaml(sections["SWAGGER/OPENAPI SPECIFICATION"])
                     st.code(yaml_content, language="yaml")
                 else:
@@ -294,7 +371,7 @@ if submit_button and use_case:
             
             # Tab 5: Architecture
             with tab5:
-                if "ARCHITECTURE FLOW" in sections:
+                if sections["ARCHITECTURE FLOW"]:
                     st.markdown(sections["ARCHITECTURE FLOW"])
                     
                     # Extract service domains and sequence for diagram
