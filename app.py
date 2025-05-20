@@ -437,31 +437,45 @@ def extract_sections(analysis_text):
     # Define section patterns with multiple variations
     section_patterns = {
         "UNDERSTANDING OF THE USE CASE": [
-            r"(?i)(?:1\.\s*)?UNDERSTANDING\s+OF\s+THE\s+USE\s+CASE\s*:?",
-            r"(?i)(?:1\.\s*)?USE\s+CASE\s+UNDERSTANDING\s*:?"
+            r"(?i)(?:1\.?\s*)?UNDERSTANDING\s+OF\s+THE\s+USE\s+CASE\s*:?",
+            r"(?i)(?:1\.?\s*)?USE\s+CASE\s+UNDERSTANDING\s*:?",
+            r"(?i)(?:1\.?\s*)?UNDERSTANDING\s+THE\s+USE\s+CASE\s*:?",
+            r"(?i)(?:1\.?\s*)?USE\s+CASE\s+ANALYSIS\s*:?",
+            r"(?i)(?:1\.?\s*)?USE\s+CASE\s+OVERVIEW\s*:?"
         ],
         "BIAN V12 MAPPING": [
-            r"(?i)(?:2\.\s*)?BIAN\s+V12\s+MAPPING\s*:?",
-            r"(?i)(?:2\.\s*)?BIAN\s+MAPPING\s*:?",
-            r"(?i)(?:2\.\s*)?MAPPING\s+TO\s+BIAN\s*:?"
+            r"(?i)(?:2\.?\s*)?BIAN\s+V12\s+MAPPING\s*:?",
+            r"(?i)(?:2\.?\s*)?BIAN\s+MAPPING\s*:?",
+            r"(?i)(?:2\.?\s*)?MAPPING\s+TO\s+BIAN\s*:?",
+            r"(?i)(?:2\.?\s*)?BIAN\s+SERVICE\s+DOMAINS\s*:?",
+            r"(?i)(?:2\.?\s*)?SERVICE\s+DOMAINS\s+MAPPING\s*:?"
         ],
         "BIAN SEMANTIC APIS": [
-            r"(?i)(?:3\.\s*)?BIAN\s+SEMANTIC\s+APIS\s*:?",
-            r"(?i)(?:3\.\s*)?SEMANTIC\s+APIS\s*:?"
+            r"(?i)(?:3\.?\s*)?BIAN\s+SEMANTIC\s+APIS\s*:?",
+            r"(?i)(?:3\.?\s*)?SEMANTIC\s+APIS\s*:?",
+            r"(?i)(?:3\.?\s*)?BIAN\s+APIS\s*:?",
+            r"(?i)(?:3\.?\s*)?STANDARDIZED\s+APIS\s*:?"
         ],
         "RECOMMENDED APIS TO EXPOSE": [
-            r"(?i)(?:4\.\s*)?RECOMMENDED\s+APIS\s+TO\s+EXPOSE\s*:?",
-            r"(?i)(?:4\.\s*)?APIS\s+TO\s+EXPOSE\s*:?"
+            r"(?i)(?:4\.?\s*)?RECOMMENDED\s+APIS\s+TO\s+EXPOSE\s*:?",
+            r"(?i)(?:4\.?\s*)?APIS\s+TO\s+EXPOSE\s*:?",
+            r"(?i)(?:4\.?\s*)?RECOMMENDED\s+APIS\s*:?",
+            r"(?i)(?:4\.?\s*)?SOLUTION\s+APIS\s*:?"
         ],
         "SWAGGER/OPENAPI SPECIFICATION": [
-            r"(?i)(?:5\.\s*)?SWAGGER\/OPENAPI\s+SPECIFICATION\s*:?",
-            r"(?i)(?:5\.\s*)?OPENAPI\s+SPECIFICATION\s*:?",
-            r"(?i)(?:5\.\s*)?SWAGGER\s+SPECIFICATION\s*:?"
+            r"(?i)(?:5\.?\s*)?SWAGGER\/OPENAPI\s+SPECIFICATION\s*:?",
+            r"(?i)(?:5\.?\s*)?OPENAPI\s+SPECIFICATION\s*:?",
+            r"(?i)(?:5\.?\s*)?SWAGGER\s+SPECIFICATION\s*:?",
+            r"(?i)(?:5\.?\s*)?API\s+SPECIFICATION\s*:?",
+            r"(?i)(?:5\.?\s*)?OPENAPI\s+SPEC\s*:?"
         ],
         "ARCHITECTURE FLOW": [
-            r"(?i)(?:6\.\s*)?ARCHITECTURE\s+FLOW\s*:?",
-            r"(?i)(?:6\.\s*)?FLOW\s+ARCHITECTURE\s*:?",
-            r"(?i)(?:6\.\s*)?SERVICE\s+DOMAIN\s+FLOW\s*:?"
+            r"(?i)(?:6\.?\s*)?ARCHITECTURE\s+FLOW\s*:?",
+            r"(?i)(?:6\.?\s*)?FLOW\s+ARCHITECTURE\s*:?",
+            r"(?i)(?:6\.?\s*)?SERVICE\s+DOMAIN\s+FLOW\s*:?",
+            r"(?i)(?:6\.?\s*)?ARCHITECTURE\s+DIAGRAM\s*:?",
+            r"(?i)(?:6\.?\s*)?INTERACTION\s+FLOW\s*:?",
+            r"(?i)(?:6\.?\s*)?ARCHITECTURE\s*:?"
         ]
     }
     
@@ -469,37 +483,55 @@ def extract_sections(analysis_text):
     for section_name in section_patterns:
         sections[section_name] = ""
     
-    # Split the text into lines
-    lines = analysis_text.split('\n')
+    # Try to find sections using regex patterns
+    for section_name, patterns in section_patterns.items():
+        for pattern in patterns:
+            matches = re.finditer(pattern, analysis_text, re.MULTILINE | re.IGNORECASE)
+            for match in matches:
+                start_pos = match.start()
+                # Found the start of a section, now find the end
+                end_pos = len(analysis_text)
+                
+                # Look for the start of the next section
+                for next_section, next_patterns in section_patterns.items():
+                    if next_section != section_name:
+                        for next_pattern in next_patterns:
+                            next_matches = re.finditer(next_pattern, analysis_text[start_pos+1:], re.MULTILINE | re.IGNORECASE)
+                            for next_match in next_matches:
+                                potential_end = start_pos + 1 + next_match.start()
+                                if potential_end < end_pos:
+                                    end_pos = potential_end
+                
+                # Extract the section content
+                section_content = analysis_text[start_pos:end_pos].strip()
+                
+                # Remove the section header from the content
+                header_end = section_content.find('\n')
+                if header_end > 0:
+                    section_content = section_content[header_end:].strip()
+                
+                # Store the content if it's non-empty
+                if section_content and len(section_content) > 10:  # Avoid empty or very short sections
+                    sections[section_name] = section_content
+                    break  # Found a valid match for this section, move to next section
     
-    current_section = None
-    section_content = []
+    # Fallback: If standard extraction failed, try simpler numbered section approach
+    if all(not content for content in sections.values()):
+        numbered_sections = re.split(r'\n\s*\d+\.\s+', analysis_text)
+        if len(numbered_sections) >= 7:  # Should be at least 7 parts (intro + 6 sections)
+            section_names = list(sections.keys())
+            for i in range(min(6, len(section_names))):
+                if i+1 < len(numbered_sections):
+                    sections[section_names[i]] = numbered_sections[i+1].strip()
     
-    for line in lines:
-        # Check if this line starts a new section
-        new_section_found = False
-        for section_name, patterns in section_patterns.items():
-            for pattern in patterns:
-                if re.match(pattern, line.strip()):
-                    # If we were building a previous section, save it
-                    if current_section:
-                        sections[current_section] = '\n'.join(section_content).strip()
-                    
-                    # Start a new section
-                    current_section = section_name
-                    section_content = []
-                    new_section_found = True
-                    break
-            if new_section_found:
-                break
-        
-        # If this line doesn't start a new section, add it to the current section
-        if not new_section_found and current_section:
-            section_content.append(line)
-    
-    # Add the last section
-    if current_section and section_content:
-        sections[current_section] = '\n'.join(section_content).strip()
+    # Final fallback: If all else fails, just split the text into roughly equal parts
+    if all(not content for content in sections.values()) and len(analysis_text) > 1000:
+        section_names = list(sections.keys())
+        section_size = len(analysis_text) // 6
+        for i in range(6):
+            start_idx = i * section_size
+            end_idx = (i+1) * section_size if i < 5 else len(analysis_text)
+            sections[section_names[i]] = analysis_text[start_idx:end_idx].strip()
     
     return sections
 
@@ -524,6 +556,13 @@ if submit_button and use_case:
                 
                 # Debug: Save raw analysis to session state for debugging
                 st.session_state.raw_analysis = analysis
+                
+                # Print response to debug
+                print("RAW RESPONSE START")
+                print(analysis[:500])  # First 500 chars
+                print("...")
+                print(analysis[-500:])  # Last 500 chars
+                print("RAW RESPONSE END")
             
             # Display the analysis in tabs
             tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -541,37 +580,64 @@ if submit_button and use_case:
             # Debug: Store extracted sections in session state
             st.session_state.extracted_sections = sections
             
+            # Utility function to format raw text in case extraction failed
+            def format_section_content(tab, section_name, section_content, section_keywords):
+                if section_content:
+                    tab.markdown(section_content)
+                else:
+                    # Try to find the section in the raw response
+                    found_content = False
+                    for keyword in section_keywords:
+                        if keyword.lower() in analysis.lower():
+                            pattern = re.compile(r'(?i).*' + re.escape(keyword.lower()) + r'.*(?:\n.*){1,50}', re.MULTILINE)
+                            matches = pattern.findall(analysis.lower())
+                            if matches:
+                                tab.warning(f"Section extraction failed, displaying raw text containing '{keyword}'")
+                                raw_text = "\n".join(matches)
+                                tab.text(raw_text)
+                                found_content = True
+                                break
+                    
+                    if not found_content:
+                        tab.error(f"No {section_name} found in the response. Please try with a more detailed use case or select the enhancement option.")
+            
             # Tab 1: Use Case Understanding
             with tab1:
-                if sections["UNDERSTANDING OF THE USE CASE"]:
-                    st.markdown(sections["UNDERSTANDING OF THE USE CASE"])
-                else:
-                    st.error("No understanding analysis found in the response. Please try with a more detailed use case or select the enhancement option.")
+                format_section_content(
+                    tab1, 
+                    "understanding analysis", 
+                    sections["UNDERSTANDING OF THE USE CASE"],
+                    ["understanding", "use case", "business objective", "process flow", "actors"]
+                )
             
             # Tab 2: BIAN Mapping
             with tab2:
-                if sections["BIAN V12 MAPPING"]:
-                    st.markdown(sections["BIAN V12 MAPPING"])
-                else:
-                    st.error("No BIAN mapping found in the response. Please try with a more detailed use case.")
+                format_section_content(
+                    tab2, 
+                    "BIAN mapping", 
+                    sections["BIAN V12 MAPPING"],
+                    ["bian mapping", "service domain", "bian v12", "service domains"]
+                )
             
             # Tab 3: API Recommendations
             with tab3:
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    if sections["BIAN SEMANTIC APIS"]:
-                        st.subheader("BIAN Semantic APIs")
-                        st.markdown(sections["BIAN SEMANTIC APIS"])
-                    else:
-                        st.error("No BIAN Semantic APIs found in the response.")
+                    format_section_content(
+                        col1, 
+                        "BIAN Semantic APIs", 
+                        sections["BIAN SEMANTIC APIS"],
+                        ["semantic api", "bian api", "standardized api"]
+                    )
                 
                 with col2:
-                    if sections["RECOMMENDED APIS TO EXPOSE"]:
-                        st.subheader("Recommended APIs to Expose")
-                        st.markdown(sections["RECOMMENDED APIS TO EXPOSE"])
-                    else:
-                        st.error("No API recommendations found in the response.")
+                    format_section_content(
+                        col2, 
+                        "API recommendations", 
+                        sections["RECOMMENDED APIS TO EXPOSE"],
+                        ["recommended api", "expose api", "solution api"]
+                    )
             
             # Tab 4: OpenAPI Spec
             with tab4:
@@ -579,14 +645,25 @@ if submit_button and use_case:
                     yaml_content = extract_yaml(sections["SWAGGER/OPENAPI SPECIFICATION"])
                     st.code(yaml_content, language="yaml")
                 else:
-                    st.error("No OpenAPI specification found in the response.")
+                    # Try to extract YAML directly from the full response
+                    yaml_content = extract_yaml(analysis)
+                    if yaml_content and yaml_content != "# No valid YAML found in the response":
+                        st.warning("Section extraction failed, but found OpenAPI specification in raw response")
+                        st.code(yaml_content, language="yaml")
+                    else:
+                        st.error("No OpenAPI specification found in the response.")
             
             # Tab 5: Architecture
             with tab5:
+                format_section_content(
+                    tab5, 
+                    "architecture flow", 
+                    sections["ARCHITECTURE FLOW"],
+                    ["architecture flow", "architecture diagram", "interaction flow", "service domain flow"]
+                )
+                
+                # Extract service domains and sequence for diagram only if we have architecture content
                 if sections["ARCHITECTURE FLOW"]:
-                    st.markdown(sections["ARCHITECTURE FLOW"])
-                    
-                    # Extract service domains and sequence for diagram
                     try:
                         domains, sequence = extract_sequence(analysis)
                         if domains:
@@ -595,8 +672,6 @@ if submit_button and use_case:
                             st.image(img_buf, caption="Service Domain Interaction Flow")
                     except Exception as e:
                         st.error(f"Error generating diagram: {str(e)}")
-                else:
-                    st.error("No architecture flow found in the response.")
             
             # Tab 6: Debug information
             with tab6:
@@ -618,8 +693,15 @@ if submit_button and use_case:
                 st.subheader("First 500 chars of Raw Response")
                 st.text(analysis[:500] + "...")
                 
+                st.subheader("Last 500 chars of Raw Response")
+                st.text("..." + analysis[-500:])
+                
                 st.subheader("Response Length")
                 st.write(f"Total characters: {len(analysis)}")
+                
+                st.subheader("Full Raw Response")
+                with st.expander("Show Full Response", expanded=False):
+                    st.text(analysis)
                 
         except Exception as e:
             st.error(f"Error analyzing use case: {str(e)}")
