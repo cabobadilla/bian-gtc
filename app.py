@@ -157,7 +157,480 @@ def extract_yaml(text):
         except:
             pass
     
+    # If we still don't have valid YAML, try to generate it from the "RECOMMENDED APIS TO EXPOSE" section
+    sections = extract_sections(text)
+    recommended_apis = sections.get("RECOMMENDED APIS TO EXPOSE", "")
+    
+    if recommended_apis:
+        return generate_openapi_from_recommendations(recommended_apis)
+    
     return "# No valid YAML found in the response"
+
+# Function to generate OpenAPI spec from recommended APIs
+def generate_openapi_from_recommendations(recommendations_text):
+    """
+    Generate a valid OpenAPI specification from the recommended APIs section.
+    """
+    # Extract endpoints using regex
+    endpoint_pattern = re.compile(r'Endpoint:\s*(\/[^\n]*)', re.IGNORECASE)
+    method_pattern = re.compile(r'Method:\s*([A-Z]+)', re.IGNORECASE)
+    purpose_pattern = re.compile(r'Purpose:\s*([^\n]*)', re.IGNORECASE)
+    
+    endpoints = endpoint_pattern.findall(recommendations_text)
+    methods = method_pattern.findall(recommendations_text)
+    purposes = purpose_pattern.findall(recommendations_text)
+    
+    # Create a basic OpenAPI spec
+    openapi_spec = {
+        "openapi": "3.0.0",
+        "info": {
+            "title": "BIAN Banking API",
+            "description": "API generated from BIAN recommendations",
+            "version": "1.0.0"
+        },
+        "servers": [
+            {
+                "url": "http://localhost:8000",
+                "description": "Local development server"
+            }
+        ],
+        "paths": {},
+        "components": {
+            "schemas": {
+                "Error": {
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "integer",
+                            "format": "int32"
+                        },
+                        "message": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "ApiResponse": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "example": "success"
+                        },
+                        "data": {
+                            "type": "object"
+                        },
+                        "message": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "securitySchemes": {
+                "OAuth2": {
+                    "type": "oauth2",
+                    "flows": {
+                        "implicit": {
+                            "authorizationUrl": "http://localhost:8000/auth",
+                            "scopes": {
+                                "read": "Read access",
+                                "write": "Write access"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    # Add specific schemas based on endpoints
+    if any("loan" in endpoint.lower() for endpoint in endpoints):
+        openapi_spec["components"]["schemas"]["LoanApplication"] = {
+            "type": "object",
+            "properties": {
+                "customerId": {
+                    "type": "string",
+                    "example": "CUST123456"
+                },
+                "loanAmount": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 10000.00
+                },
+                "loanPurpose": {
+                    "type": "string",
+                    "example": "Home renovation"
+                },
+                "loanTerm": {
+                    "type": "integer",
+                    "example": 36,
+                    "description": "Loan term in months"
+                },
+                "incomeAmount": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 5000.00
+                },
+                "employmentDetails": {
+                    "type": "object",
+                    "properties": {
+                        "employer": {
+                            "type": "string",
+                            "example": "Acme Corp"
+                        },
+                        "position": {
+                            "type": "string",
+                            "example": "Software Engineer"
+                        },
+                        "yearsEmployed": {
+                            "type": "integer",
+                            "example": 5
+                        }
+                    }
+                },
+                "existingObligations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "example": "Credit Card"
+                            },
+                            "amount": {
+                                "type": "number",
+                                "format": "float",
+                                "example": 2500.00
+                            },
+                            "monthlyPayment": {
+                                "type": "number",
+                                "format": "float",
+                                "example": 250.00
+                            }
+                        }
+                    }
+                }
+            },
+            "required": ["customerId", "loanAmount", "loanTerm"]
+        }
+        
+        openapi_spec["components"]["schemas"]["LoanOffer"] = {
+            "type": "object",
+            "properties": {
+                "offerId": {
+                    "type": "string",
+                    "example": "OFFER789012"
+                },
+                "customerId": {
+                    "type": "string",
+                    "example": "CUST123456"
+                },
+                "loanAmount": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 10000.00
+                },
+                "apr": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 8.5
+                },
+                "monthlyPayment": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 315.00
+                },
+                "loanTerm": {
+                    "type": "integer",
+                    "example": 36,
+                    "description": "Loan term in months"
+                },
+                "offerExpiryDate": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2023-12-31"
+                }
+            }
+        }
+        
+        openapi_spec["components"]["schemas"]["LoanProduct"] = {
+            "type": "object",
+            "properties": {
+                "productId": {
+                    "type": "string",
+                    "example": "PROD123"
+                },
+                "productName": {
+                    "type": "string",
+                    "example": "Personal Loan"
+                },
+                "minAmount": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 1000.00
+                },
+                "maxAmount": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 50000.00
+                },
+                "minTerm": {
+                    "type": "integer",
+                    "example": 12,
+                    "description": "Minimum term in months"
+                },
+                "maxTerm": {
+                    "type": "integer",
+                    "example": 60,
+                    "description": "Maximum term in months"
+                },
+                "baseRate": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 7.5
+                },
+                "features": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": ["No early repayment fee", "Payment holiday option"]
+                },
+                "requirements": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": ["Minimum income $3000", "Good credit score"]
+                }
+            }
+        }
+    
+    # Add the endpoints to the spec
+    for i, endpoint in enumerate(endpoints):
+        if i < len(methods):
+            method = methods[i].lower()
+        else:
+            method = "post"  # Default to POST if method not specified
+            
+        if i < len(purposes):
+            description = purposes[i]
+        else:
+            description = f"API endpoint for {endpoint}"
+            
+        endpoint_path = endpoint.strip()
+        
+        # Create a path object if it doesn't exist
+        if endpoint_path not in openapi_spec["paths"]:
+            openapi_spec["paths"][endpoint_path] = {}
+            
+        # Add request/response schema based on endpoint name and method
+        request_body = None
+        responses = {
+            "200": {
+                "description": "Successful operation",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/ApiResponse"
+                        }
+                    }
+                }
+            },
+            "400": {
+                "description": "Bad request",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Error"
+                        }
+                    }
+                }
+            },
+            "401": {
+                "description": "Unauthorized",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Error"
+                        }
+                    }
+                }
+            }
+        }
+        
+        # Customize request/response based on endpoint
+        if "loan" in endpoint_path.lower():
+            if "product" in endpoint_path.lower():
+                request_body = {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "customerId": {
+                                        "type": "string",
+                                        "example": "CUST123456"
+                                    },
+                                    "amount": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 10000.00
+                                    },
+                                    "term": {
+                                        "type": "integer",
+                                        "example": 36
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "required": True
+                }
+                responses["200"]["content"]["application/json"]["schema"] = {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "example": "success"
+                        },
+                        "products": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/components/schemas/LoanProduct"
+                            }
+                        }
+                    }
+                }
+            elif "application" in endpoint_path.lower():
+                request_body = {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoanApplication"
+                            }
+                        }
+                    },
+                    "required": True
+                }
+                responses["200"]["content"]["application/json"]["schema"] = {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "example": "success"
+                        },
+                        "applicationId": {
+                            "type": "string",
+                            "example": "APP123456"
+                        },
+                        "offer": {
+                            "$ref": "#/components/schemas/LoanOffer"
+                        }
+                    }
+                }
+            elif "offer" in endpoint_path.lower():
+                request_body = {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "offerId": {
+                                        "type": "string",
+                                        "example": "OFFER789012"
+                                    },
+                                    "customerId": {
+                                        "type": "string",
+                                        "example": "CUST123456"
+                                    },
+                                    "accepted": {
+                                        "type": "boolean",
+                                        "example": True
+                                    },
+                                    "digitalSignature": {
+                                        "type": "string",
+                                        "example": "SIG12345"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "required": True
+                }
+            elif "funds" in endpoint_path.lower() or "disburs" in endpoint_path.lower():
+                request_body = {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "loanId": {
+                                        "type": "string",
+                                        "example": "LOAN123456"
+                                    },
+                                    "accountId": {
+                                        "type": "string",
+                                        "example": "ACCT123456"
+                                    },
+                                    "amount": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 10000.00
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "required": True
+                }
+                responses["200"]["content"]["application/json"]["schema"] = {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "example": "success"
+                        },
+                        "transactionId": {
+                            "type": "string",
+                            "example": "TXN123456"
+                        },
+                        "disbursedAmount": {
+                            "type": "number",
+                            "format": "float",
+                            "example": 10000.00
+                        },
+                        "accountId": {
+                            "type": "string",
+                            "example": "ACCT123456"
+                        },
+                        "disbursementDate": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2023-06-01T10:30:00Z"
+                        }
+                    }
+                }
+        
+        # Add the method to the path
+        openapi_spec["paths"][endpoint_path][method] = {
+            "summary": description,
+            "description": description,
+            "operationId": f"{method}_{endpoint_path.replace('/', '_').replace('-', '_').replace('{', '').replace('}', '')}",
+            "security": [{"OAuth2": ["read", "write"]}],
+            "responses": responses
+        }
+        
+        # Add request body if defined
+        if request_body:
+            openapi_spec["paths"][endpoint_path][method]["requestBody"] = request_body
+    
+    # Convert to YAML
+    try:
+        yaml_content = yaml.dump(openapi_spec, sort_keys=False)
+        return yaml_content
+    except Exception as e:
+        print(f"Error converting OpenAPI spec to YAML: {str(e)}")
+        return "# Error generating OpenAPI spec from recommendations"
 
 # Function to extract service domain sequence for architecture diagram
 def extract_sequence(text):
