@@ -18,10 +18,9 @@ A Streamlit application that analyzes banking use cases and maps them to BIAN (B
    ```
    pip install -r requirements.txt
    ```
-3. Set up your OpenAI API key in `.streamlit/secrets.toml`:
+3. Create a `.streamlit/secrets.toml` file with your OpenAI API key:
    ```
-   [openai]
-   api_key = "your-openai-api-key-here"
+   OPENAI_API_KEY = "your-openai-api-key-here"
    ```
 4. Run the Streamlit app:
    ```
@@ -37,8 +36,7 @@ A Streamlit application that analyzes banking use cases and maps them to BIAN (B
    - Navigate to your app settings
    - Under "Secrets", add the following:
      ```
-     [openai]
-     api_key = "your-openai-api-key-here"
+     OPENAI_API_KEY = "your-openai-api-key-here"
      ```
 5. Deploy the app
 
