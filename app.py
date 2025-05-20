@@ -61,6 +61,804 @@ def prev_step():
     if st.session_state.step > 1:
         st.session_state.step -= 1
 
+# Function to extract sections from the analysis
+def extract_sections(text):
+    """
+    Extract different sections from the analysis text.
+    """
+    sections = {
+        "UNDERSTANDING OF THE USE CASE": "",
+        "BIAN V12 MAPPING": "",
+        "BIAN SEMANTIC APIS": "",
+        "RECOMMENDED APIS TO EXPOSE": "",
+        "SWAGGER/OPENAPI SPECIFICATION": "",
+        "ARCHITECTURE FLOW": ""
+    }
+    
+    # Use regex to find each section and its content
+    for section_name in sections.keys():
+        # Create patterns that match section headers in different formats
+        patterns = [
+            # Exact match with a number prefix (e.g., "1. UNDERSTANDING OF THE USE CASE")
+            re.compile(rf'(?:\d+\.?\s*)?{re.escape(section_name)}[:\s]*\n(.*?)(?:\n(?:\d+\.?\s*)?[A-Z][A-Z\s/]+[:\s]*\n|\Z)', re.DOTALL | re.IGNORECASE),
+            
+            # Match with a hash prefix (e.g., "# UNDERSTANDING OF THE USE CASE")
+            re.compile(rf'(?:#+\s*)?{re.escape(section_name)}[:\s]*\n(.*?)(?:\n(?:#+\s*)?[A-Z][A-Z\s/]+[:\s]*\n|\Z)', re.DOTALL | re.IGNORECASE),
+            
+            # Simplified section name match
+            re.compile(rf'{re.escape(section_name.split("/")[0] if "/" in section_name else section_name)}[:\s]*\n(.*?)(?:\n(?:\d+\.?\s*)?[A-Z][A-Z\s/]+[:\s]*\n|\Z)', re.DOTALL | re.IGNORECASE)
+        ]
+        
+        # Try each pattern until we find a match
+        for pattern in patterns:
+            match = pattern.search(text)
+            if match:
+                sections[section_name] = match.group(1).strip()
+                break
+    
+    return sections
+
+# Function to extract YAML content from text
+def extract_yaml(text):
+    """
+    Extract YAML content from the text.
+    """
+    # Common patterns for YAML or JSON code blocks
+    patterns = [
+        # Markdown code block for yaml
+        re.compile(r'```ya?ml\s*(.*?)\s*```', re.DOTALL | re.IGNORECASE),
+        
+        # Markdown code block without language specification
+        re.compile(r'```\s*(openapi:\s*.*?)\s*```', re.DOTALL | re.IGNORECASE),
+        
+        # Indented code block without markdown markers
+        re.compile(r'(?:^|\n)(\s{2,}openapi:\s*.*?)(?:\n\S|\Z)', re.DOTALL | re.IGNORECASE)
+    ]
+    
+    for pattern in patterns:
+        matches = pattern.findall(text)
+        if matches:
+            # Return the first valid match
+            for match in matches:
+                try:
+                    # Check if it's valid YAML
+                    yaml.safe_load(match)
+                    return match
+                except:
+                    continue
+    
+    # If we couldn't extract a valid YAML, check if there's any text with OpenAPI structure
+    if 'openapi:' in text and ('paths:' in text or 'components:' in text):
+        # Try to extract an approximate YAML structure
+        try:
+            # Find the openapi declaration and start from there
+            openapi_match = re.search(r'openapi:\s*["\']?\d+\.\d+\.\d+["\']?.*?(?=\n\S+:|$)', text, re.DOTALL)
+            if openapi_match:
+                start_pos = openapi_match.start()
+                yaml_text = text[start_pos:]
+                
+                # Try to find where the YAML content ends (next non-YAML section)
+                end_markers = ['\n# ', '\n## ', '\n```', '\n1. ', '\n2. ']
+                end_positions = [yaml_text.find(marker) for marker in end_markers if yaml_text.find(marker) > 0]
+                
+                if end_positions:
+                    end_pos = min(end_positions)
+                    yaml_text = yaml_text[:end_pos]
+                
+                # Clean up the extracted text
+                yaml_text = '\n'.join(line for line in yaml_text.split('\n') if line.strip())
+                
+                # Validate that it's proper YAML before returning
+                try:
+                    yaml.safe_load(yaml_text)
+                    return yaml_text
+                except:
+                    pass
+        except:
+            pass
+    
+    return "# No valid YAML found in the response"
+
+# Function to extract service domain sequence for architecture diagram
+def extract_sequence(text):
+    """
+    Extract service domains and their sequence from the architecture flow section.
+    """
+    # Initialize lists for domains and sequence
+    domains = []
+    sequence = []
+    
+    # Extract architecture flow section
+    sections = extract_sections(text)
+    architecture_flow = sections.get("ARCHITECTURE FLOW", "")
+    
+    if not architecture_flow:
+        # Try to find architecture flow information in the raw text
+        arch_match = re.search(r'(?:architecture|flow|sequence|interaction).*?(?:\n.*){1,50}', text, re.IGNORECASE)
+        if arch_match:
+            architecture_flow = arch_match.group(0)
+    
+    # Extract service domains mentioned
+    domain_pattern = re.compile(r'(?:service domain|component)?\s*["\']?([\w\s&-]+?(?:Management|Agreement|Administration|Operations|Processing|Service|Module))["\']?', re.IGNORECASE)
+    domain_matches = domain_pattern.findall(architecture_flow)
+    
+    # Clean up and deduplicate the domain names
+    unique_domains = set()
+    for match in domain_matches:
+        domain = match.strip()
+        # Only add if the domain has at least 5 characters and contains domain-like words
+        if len(domain) > 5 and any(keyword in domain.lower() for keyword in ['management', 'agreement', 'service', 'processing', 'operations']):
+            unique_domains.add(domain)
+    
+    domains = list(unique_domains)
+    
+    # If we found less than 2 domains, try to find them in the BIAN mapping section
+    if len(domains) < 2:
+        bian_mapping = sections.get("BIAN V12 MAPPING", "")
+        domain_matches = domain_pattern.findall(bian_mapping)
+        
+        for match in domain_matches:
+            domain = match.strip()
+            if len(domain) > 5 and any(keyword in domain.lower() for keyword in ['management', 'agreement', 'service', 'processing', 'operations']):
+                unique_domains.add(domain)
+        
+        domains = list(unique_domains)
+    
+    # Limit to at most 6 domains for diagram clarity
+    domains = domains[:6]
+    
+    # Extract interaction sequence (or create a simple linear sequence)
+    sequence_pattern = re.compile(r'(?:(\d+)[\.\)]\s*(.*?)\s*(?:sends|calls|requests|interacts|processes).*?(to|with)\s*([\w\s&-]+))|(?:([\w\s&-]+).*?(?:sends|calls|requests|interacts|processes).*?(to|with)\s*([\w\s&-]+))', re.IGNORECASE)
+    sequence_matches = sequence_pattern.findall(architecture_flow)
+    
+    if sequence_matches:
+        for match in sequence_matches:
+            # The match could be in either format, so check both
+            if match[0]:  # Numbered step format
+                from_domain = match[1].strip()
+                to_domain = match[3].strip()
+            else:  # Direct mention format
+                from_domain = match[4].strip()
+                to_domain = match[6].strip()
+            
+            # Check if these domains are in our domain list
+            from_idx = -1
+            to_idx = -1
+            
+            for i, domain in enumerate(domains):
+                if from_domain.lower() in domain.lower() or domain.lower() in from_domain.lower():
+                    from_idx = i
+                if to_domain.lower() in domain.lower() or domain.lower() in to_domain.lower():
+                    to_idx = i
+            
+            if from_idx != -1 and to_idx != -1 and from_idx != to_idx:
+                sequence.append((from_idx, to_idx))
+    
+    # If no sequences found, create a simple linear sequence
+    if not sequence and len(domains) > 1:
+        for i in range(len(domains)-1):
+            sequence.append((i, i+1))
+    
+    return domains, sequence
+
+# Function to create an architecture diagram
+def create_architecture_diagram(domains, sequence):
+    """
+    Create an architecture diagram showing service domain interactions.
+    """
+    # Set up dimensions
+    width = 1200
+    height = 800
+    margin = 50
+    domain_width = 200
+    domain_height = 100
+    arrow_size = 15
+    
+    # Create the image
+    img = Image.new('RGB', (width, height), color='white')
+    draw = ImageDraw.Draw(img)
+    
+    # Try to load a font (fallback to default if not available)
+    try:
+        font_title = ImageFont.truetype("Arial", 14)
+        font_text = ImageFont.truetype("Arial", 12)
+    except:
+        font_title = ImageFont.load_default()
+        font_text = ImageFont.load_default()
+    
+    # Calculate positions for domains
+    domain_positions = []
+    num_domains = len(domains)
+    
+    if num_domains <= 2:
+        # Two domains horizontally aligned
+        positions = [
+            (margin + domain_width//2, height//2),
+            (width - margin - domain_width//2, height//2)
+        ]
+        domain_positions = positions[:num_domains]
+    
+    elif num_domains <= 4:
+        # Four domains in a rectangular layout
+        positions = [
+            (margin + domain_width//2, margin + domain_height//2),  # Top left
+            (width - margin - domain_width//2, margin + domain_height//2),  # Top right
+            (margin + domain_width//2, height - margin - domain_height//2),  # Bottom left
+            (width - margin - domain_width//2, height - margin - domain_height//2)  # Bottom right
+        ]
+        domain_positions = positions[:num_domains]
+    
+    else:
+        # Circular layout for more domains
+        center_x = width // 2
+        center_y = height // 2
+        radius = min(width, height) // 3
+        
+        for i in range(num_domains):
+            angle = 2 * math.pi * i / num_domains - math.pi / 2  # Start from the top
+            x = center_x + radius * math.cos(angle)
+            y = center_y + radius * math.sin(angle)
+            domain_positions.append((x, y))
+    
+    # Draw domains
+    for i, (x, y) in enumerate(domain_positions):
+        # Draw domain box
+        domain_name = domains[i]
+        box_left = x - domain_width // 2
+        box_top = y - domain_height // 2
+        box_right = x + domain_width // 2
+        box_bottom = y + domain_height // 2
+        
+        # Draw the box with a light blue background
+        draw.rectangle([box_left, box_top, box_right, box_bottom], fill=(230, 240, 255), outline=(0, 60, 120), width=2)
+        
+        # Draw the domain name (with text wrapping)
+        wrapped_text = textwrap.wrap(domain_name, width=18)
+        text_y = y - (len(wrapped_text) * 15) // 2
+        
+        for line in wrapped_text:
+            text_width = draw.textlength(line, font=font_title)
+            draw.text((x - text_width // 2, text_y), line, fill=(0, 0, 0), font=font_title)
+            text_y += 15
+    
+    # Draw connections between domains
+    for from_idx, to_idx in sequence:
+        if from_idx < len(domain_positions) and to_idx < len(domain_positions):
+            from_x, from_y = domain_positions[from_idx]
+            to_x, to_y = domain_positions[to_idx]
+            
+            # Calculate the direction vector
+            dir_x = to_x - from_x
+            dir_y = to_y - from_y
+            length = math.sqrt(dir_x**2 + dir_y**2)
+            
+            # Normalize the direction vector
+            if length > 0:
+                dir_x /= length
+                dir_y /= length
+            
+            # Adjust start and end points to be at the domain box edges
+            start_x = from_x + dir_x * domain_width // 2
+            start_y = from_y + dir_y * domain_height // 2
+            end_x = to_x - dir_x * domain_width // 2
+            end_y = to_y - dir_y * domain_height // 2
+            
+            # Draw the line
+            draw.line([(start_x, start_y), (end_x, end_y)], fill=(0, 100, 200), width=2)
+            
+            # Draw arrowhead
+            angle = math.atan2(dir_y, dir_x)
+            arrow_x1 = end_x - arrow_size * math.cos(angle - math.pi/8)
+            arrow_y1 = end_y - arrow_size * math.sin(angle - math.pi/8)
+            arrow_x2 = end_x - arrow_size * math.cos(angle + math.pi/8)
+            arrow_y2 = end_y - arrow_size * math.sin(angle + math.pi/8)
+            
+            draw.polygon([(end_x, end_y), (arrow_x1, arrow_y1), (arrow_x2, arrow_y2)], fill=(0, 100, 200))
+            
+            # Add a midpoint label if available
+            if len(sequence) <= 3:  # Only add labels if not too crowded
+                mid_x = (start_x + end_x) / 2
+                mid_y = (start_y + end_y) / 2 - 10
+                
+                label = f"call"
+                text_width = draw.textlength(label, font=font_text)
+                
+                # Add a small white background for the text
+                text_bg_left = mid_x - text_width // 2 - 2
+                text_bg_top = mid_y - 2
+                text_bg_right = mid_x + text_width // 2 + 2
+                text_bg_bottom = mid_y + 12
+                
+                draw.rectangle([text_bg_left, text_bg_top, text_bg_right, text_bg_bottom], fill=(255, 255, 255))
+                draw.text((mid_x - text_width // 2, mid_y), label, fill=(100, 100, 100), font=font_text)
+    
+    # Add a title
+    title = "BIAN Service Domain Architecture Flow"
+    title_width = draw.textlength(title, font=font_title)
+    draw.text(((width - title_width) // 2, 10), title, fill=(0, 0, 0), font=font_title)
+    
+    # Convert the image to a Streamlit-compatible format
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return buf
+
+# Function to extract endpoints from OpenAPI spec
+def extract_endpoints_from_spec(yaml_content):
+    """
+    Extract endpoints from an OpenAPI specification.
+    """
+    try:
+        # Parse the YAML content
+        spec = yaml.safe_load(yaml_content)
+        
+        # Check if it's a valid OpenAPI spec
+        if not spec or 'paths' not in spec:
+            return []
+        
+        endpoints = []
+        
+        # Process each path
+        for path, path_info in spec['paths'].items():
+            for method, operation in path_info.items():
+                # Skip if not a HTTP method
+                if method not in ['get', 'post', 'put', 'delete', 'patch']:
+                    continue
+                
+                endpoint = {
+                    'path': path,
+                    'method': method.upper(),
+                    'summary': operation.get('summary', 'No description'),
+                    'operationId': operation.get('operationId', f"{method}_{path.replace('/', '_')}"),
+                    'path_params': [],
+                    'query_params': [],
+                    'sample_body': None
+                }
+                
+                # Extract parameters
+                params = operation.get('parameters', [])
+                for param in params:
+                    if 'name' not in param:
+                        continue
+                    
+                    param_info = {
+                        'name': param['name'],
+                        'required': param.get('required', False),
+                        'example': param.get('example', '')
+                    }
+                    
+                    # If schema has an example, use it
+                    if 'schema' in param and 'example' in param['schema']:
+                        param_info['example'] = param['schema']['example']
+                    
+                    # Add to the appropriate parameter list
+                    if param.get('in') == 'path':
+                        endpoint['path_params'].append(param_info)
+                    elif param.get('in') == 'query':
+                        endpoint['query_params'].append(param_info)
+                
+                # Extract request body example if available
+                if 'requestBody' in operation and 'content' in operation['requestBody']:
+                    content = operation['requestBody']['content']
+                    if 'application/json' in content and 'example' in content['application/json']:
+                        endpoint['sample_body'] = content['application/json']['example']
+                    elif 'application/json' in content and 'schema' in content['application/json']:
+                        schema = content['application/json']['schema']
+                        if 'example' in schema:
+                            endpoint['sample_body'] = schema['example']
+                        elif 'examples' in schema and schema['examples']:
+                            endpoint['sample_body'] = next(iter(schema['examples'].values()))
+                        else:
+                            # Create a sample based on the schema properties
+                            sample = {}
+                            if 'properties' in schema:
+                                for prop_name, prop_info in schema['properties'].items():
+                                    if 'example' in prop_info:
+                                        sample[prop_name] = prop_info['example']
+                                    elif 'type' in prop_info:
+                                        # Generate a default value based on type
+                                        if prop_info['type'] == 'string':
+                                            sample[prop_name] = f"sample_{prop_name}"
+                                        elif prop_info['type'] == 'integer':
+                                            sample[prop_name] = 42
+                                        elif prop_info['type'] == 'number':
+                                            sample[prop_name] = 3.14
+                                        elif prop_info['type'] == 'boolean':
+                                            sample[prop_name] = True
+                                        elif prop_info['type'] == 'array':
+                                            sample[prop_name] = []
+                                        elif prop_info['type'] == 'object':
+                                            sample[prop_name] = {}
+                            endpoint['sample_body'] = sample
+                
+                endpoints.append(endpoint)
+        
+        return endpoints
+    
+    except Exception as e:
+        print(f"Error extracting endpoints: {str(e)}")
+        return []
+
+# Function to generate FastAPI code from OpenAPI spec
+def generate_fastapi_code(yaml_content, api_name):
+    """
+    Generate FastAPI code from an OpenAPI specification.
+    """
+    try:
+        # Parse the YAML content
+        spec = yaml.safe_load(yaml_content)
+        
+        # Generate the FastAPI code
+        code = [
+            "from fastapi import FastAPI, Query, Path, Body, HTTPException",
+            "from pydantic import BaseModel, Field",
+            "from typing import List, Dict, Any, Optional",
+            "import uvicorn",
+            "from fastapi.middleware.cors import CORSMiddleware",
+            "import uuid",
+            "import random",
+            "import json",
+            "from datetime import datetime, date",
+            "",
+            f"app = FastAPI(title=\"{api_name}\", version=\"1.0.0\")",
+            "",
+            "# Add CORS middleware",
+            "app.add_middleware(",
+            "    CORSMiddleware,",
+            "    allow_origins=[\"*\"],",
+            "    allow_credentials=True,",
+            "    allow_methods=[\"*\"],",
+            "    allow_headers=[\"*\"],",
+            ")",
+            "",
+            "# Mock database for storing data",
+            "db = {}"
+        ]
+        
+        # Add Pydantic models
+        models_added = set()
+        schemas = {}
+        
+        # Collect all schemas from components
+        if 'components' in spec and 'schemas' in spec['components']:
+            schemas = spec['components']['schemas']
+        
+        # Add model definitions
+        for schema_name, schema in schemas.items():
+            if schema_name in models_added:
+                continue
+                
+            code.append("")
+            code.append(f"class {schema_name}(BaseModel):")
+            
+            # Add properties
+            properties = schema.get('properties', {})
+            if not properties:
+                code.append("    pass")
+                continue
+                
+            for prop_name, prop_info in properties.items():
+                prop_type = prop_info.get('type', 'Any')
+                
+                # Convert OpenAPI types to Python types
+                if prop_type == 'string':
+                    py_type = 'str'
+                elif prop_type == 'integer':
+                    py_type = 'int'
+                elif prop_type == 'number':
+                    py_type = 'float'
+                elif prop_type == 'boolean':
+                    py_type = 'bool'
+                elif prop_type == 'array':
+                    items_type = 'Any'
+                    if 'items' in prop_info:
+                        items = prop_info['items']
+                        if 'type' in items:
+                            items_type = items['type']
+                            if items_type == 'string':
+                                items_type = 'str'
+                            elif items_type == 'integer':
+                                items_type = 'int'
+                            elif items_type == 'number':
+                                items_type = 'float'
+                            elif items_type == 'boolean':
+                                items_type = 'bool'
+                        elif '$ref' in items:
+                            ref = items['$ref']
+                            items_type = ref.split('/')[-1]
+                    py_type = f"List[{items_type}]"
+                elif prop_type == 'object':
+                    py_type = 'Dict'
+                else:
+                    py_type = 'Any'
+                
+                # Add the field
+                example = prop_info.get('example', '')
+                if example:
+                    code.append(f"    {prop_name}: {py_type} = Field(None, example=\"{example}\")")
+                else:
+                    code.append(f"    {prop_name}: {py_type} = None")
+            
+            models_added.add(schema_name)
+        
+        # Add endpoints
+        if 'paths' in spec:
+            for path, path_info in spec['paths'].items():
+                # Process each HTTP method
+                for method, operation in path_info.items():
+                    # Skip if not a HTTP method
+                    if method not in ['get', 'post', 'put', 'delete', 'patch']:
+                        continue
+                        
+                    # Get operation details
+                    summary = operation.get('summary', f"{method.upper()} {path}")
+                    op_id = operation.get('operationId', f"{method}_{path.replace('/', '_').replace('{', '').replace('}', '')}")
+                    
+                    # Generate function parameters
+                    params = []
+                    
+                    # Path parameters
+                    for param in operation.get('parameters', []):
+                        if param.get('in') == 'path':
+                            param_name = param['name']
+                            param_type = 'str'
+                            if 'schema' in param and 'type' in param['schema']:
+                                schema_type = param['schema']['type']
+                                if schema_type == 'integer':
+                                    param_type = 'int'
+                                elif schema_type == 'number':
+                                    param_type = 'float'
+                            
+                            param_line = f"{param_name}: {param_type} = Path(...)"
+                            params.append(param_line)
+                    
+                    # Query parameters
+                    for param in operation.get('parameters', []):
+                        if param.get('in') == 'query':
+                            param_name = param['name']
+                            param_type = 'str'
+                            if 'schema' in param and 'type' in param['schema']:
+                                schema_type = param['schema']['type']
+                                if schema_type == 'integer':
+                                    param_type = 'int'
+                                elif schema_type == 'number':
+                                    param_type = 'float'
+                                elif schema_type == 'boolean':
+                                    param_type = 'bool'
+                            
+                            required = param.get('required', False)
+                            if required:
+                                param_line = f"{param_name}: {param_type} = Query(...)"
+                            else:
+                                param_line = f"{param_name}: Optional[{param_type}] = Query(None)"
+                            params.append(param_line)
+                    
+                    # Request body
+                    if 'requestBody' in operation and 'content' in operation['requestBody']:
+                        content = operation['requestBody']['content']
+                        if 'application/json' in content:
+                            json_schema = content['application/json']
+                            if 'schema' in json_schema:
+                                schema = json_schema['schema']
+                                if '$ref' in schema:
+                                    model_name = schema['$ref'].split('/')[-1]
+                                    params.append(f"body: {model_name} = Body(...)")
+                                else:
+                                    params.append("body: Dict = Body(...)")
+                    
+                    # Add the endpoint function
+                    code.append("")
+                    code.append(f"@app.{method}(\"{path}\")")
+                    code.append(f"async def {op_id}({', '.join(params)}):")
+                    code.append(f"    \"\"\"")
+                    code.append(f"    {summary}")
+                    code.append(f"    \"\"\"")
+                    
+                    # Add a mock implementation based on the method
+                    if method == 'get':
+                        if '{' in path and '}' in path:  # It's a get by ID
+                            resource_name = path.split('/')[-2]
+                            id_param = path.split('/')[-1].replace('{', '').replace('}', '')
+                            code.append(f"    # Mock implementation for GET by ID")
+                            code.append(f"    if '{resource_name}' not in db:")
+                            code.append(f"        db['{resource_name}'] = []")
+                            code.append(f"    ")
+                            code.append(f"    # Find the resource by ID")
+                            code.append(f"    found = next((item for item in db['{resource_name}'] if item.get('id') == {id_param}), None)")
+                            code.append(f"    ")
+                            code.append(f"    if not found:")
+                            code.append(f"        raise HTTPException(status_code=404, detail=\"{resource_name.title()} not found\")")
+                            code.append(f"    ")
+                            code.append(f"    return found")
+                        else:  # It's a list endpoint
+                            resource_name = path.split('/')[-1]
+                            if not resource_name:  # Handle root path
+                                resource_name = 'items'
+                            code.append(f"    # Mock implementation for GET list")
+                            code.append(f"    if '{resource_name}' not in db:")
+                            code.append(f"        db['{resource_name}'] = []")
+                            code.append(f"    ")
+                            code.append(f"    return db['{resource_name}']")
+                    
+                    elif method == 'post':
+                        resource_name = path.split('/')[-1]
+                        if not resource_name:  # Handle root path
+                            resource_name = 'items'
+                        code.append(f"    # Mock implementation for POST")
+                        code.append(f"    if '{resource_name}' not in db:")
+                        code.append(f"        db['{resource_name}'] = []")
+                        code.append(f"    ")
+                        code.append(f"    # Convert to dict and add an ID")
+                        code.append(f"    new_item = body.dict() if hasattr(body, 'dict') else body")
+                        code.append(f"    new_item['id'] = str(uuid.uuid4())")
+                        code.append(f"    new_item['created_at'] = datetime.now().isoformat()")
+                        code.append(f"    ")
+                        code.append(f"    db['{resource_name}'].append(new_item)")
+                        code.append(f"    ")
+                        code.append(f"    return new_item")
+                    
+                    elif method == 'put':
+                        resource_name = path.split('/')[-2]
+                        id_param = path.split('/')[-1].replace('{', '').replace('}', '')
+                        code.append(f"    # Mock implementation for PUT")
+                        code.append(f"    if '{resource_name}' not in db:")
+                        code.append(f"        db['{resource_name}'] = []")
+                        code.append(f"    ")
+                        code.append(f"    # Find the index of the item to update")
+                        code.append(f"    index = next((i for i, item in enumerate(db['{resource_name}']) if item.get('id') == {id_param}), -1)")
+                        code.append(f"    ")
+                        code.append(f"    if index == -1:")
+                        code.append(f"        raise HTTPException(status_code=404, detail=\"{resource_name.title()} not found\")")
+                        code.append(f"    ")
+                        code.append(f"    # Update the item")
+                        code.append(f"    updated_item = body.dict() if hasattr(body, 'dict') else body")
+                        code.append(f"    updated_item['id'] = {id_param}")
+                        code.append(f"    updated_item['updated_at'] = datetime.now().isoformat()")
+                        code.append(f"    ")
+                        code.append(f"    db['{resource_name}'][index] = updated_item")
+                        code.append(f"    ")
+                        code.append(f"    return updated_item")
+                    
+                    elif method == 'delete':
+                        resource_name = path.split('/')[-2]
+                        id_param = path.split('/')[-1].replace('{', '').replace('}', '')
+                        code.append(f"    # Mock implementation for DELETE")
+                        code.append(f"    if '{resource_name}' not in db:")
+                        code.append(f"        db['{resource_name}'] = []")
+                        code.append(f"    ")
+                        code.append(f"    # Find the index of the item to delete")
+                        code.append(f"    index = next((i for i, item in enumerate(db['{resource_name}']) if item.get('id') == {id_param}), -1)")
+                        code.append(f"    ")
+                        code.append(f"    if index == -1:")
+                        code.append(f"        raise HTTPException(status_code=404, detail=\"{resource_name.title()} not found\")")
+                        code.append(f"    ")
+                        code.append(f"    # Delete the item")
+                        code.append(f"    deleted_item = db['{resource_name}'].pop(index)")
+                        code.append(f"    ")
+                        code.append(f"    return {{'message': '{resource_name.title()} deleted successfully', 'id': {id_param}}}")
+                    
+                    else:  # patch and other methods
+                        code.append(f"    # Mock implementation")
+                        code.append(f"    return {{'message': 'Endpoint implemented', 'method': '{method.upper()}', 'path': '{path}'}}")
+        
+        # Add the main block for running the app
+        code.append("")
+        code.append("if __name__ == \"__main__\":")
+        code.append("    uvicorn.run(app, host=\"0.0.0.0\", port=8000)")
+        
+        return "\n".join(code)
+    
+    except Exception as e:
+        print(f"Error generating FastAPI code: {str(e)}")
+        return f"# Error generating FastAPI code: {str(e)}"
+
+# Function to deploy API
+def deploy_api(api_code, port=8000):
+    """
+    Deploy an API from generated code.
+    """
+    try:
+        # Create a temporary file for the API code
+        api_file = tempfile.NamedTemporaryFile(suffix=".py", delete=False)
+        with open(api_file.name, "w") as f:
+            f.write(api_code)
+        
+        # Command to run the API server
+        cmd = ["uvicorn", f"{os.path.splitext(os.path.basename(api_file.name))[0]}:app", "--host", "0.0.0.0", "--port", str(port)]
+        
+        # Start the server in a separate process
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=os.path.dirname(api_file.name)
+        )
+        
+        # Wait a bit for the server to start
+        time.sleep(2)
+        
+        # Check if the process is still running
+        if process.poll() is not None:
+            # Process has terminated
+            return {"error": f"Failed to start API server: {process.stderr.read().decode('utf-8')}"}
+        
+        # Return deployment info
+        return {
+            "process": process,
+            "file": api_file.name,
+            "port": port,
+            "url": f"http://localhost:{port}"
+        }
+    
+    except Exception as e:
+        return {"error": str(e)}
+
+# Function to stop an API deployment
+def stop_api(deployment):
+    """
+    Stop a running API deployment.
+    """
+    if not deployment or "process" not in deployment:
+        return
+    
+    try:
+        # Kill the process
+        deployment["process"].terminate()
+        deployment["process"].wait(timeout=5)
+        
+        # Remove the temporary file
+        if "file" in deployment and os.path.exists(deployment["file"]):
+            os.unlink(deployment["file"])
+    except Exception as e:
+        print(f"Error stopping API: {str(e)}")
+
+# Function to test an API endpoint
+def test_api_endpoint(url, method, body=None):
+    """
+    Test an API endpoint with the given method and body.
+    """
+    try:
+        # Prepare the request
+        method = method.lower()
+        headers = {"Content-Type": "application/json"}
+        
+        # Measure the response time
+        start_time = time.time()
+        
+        # Send the request
+        response = None
+        if method == "get":
+            response = requests.get(url, headers=headers)
+        elif method == "post":
+            response = requests.post(url, headers=headers, json=body)
+        elif method == "put":
+            response = requests.put(url, headers=headers, json=body)
+        elif method == "delete":
+            response = requests.delete(url, headers=headers)
+        elif method == "patch":
+            response = requests.patch(url, headers=headers, json=body)
+        else:
+            return {"error": f"Unsupported method: {method}"}
+        
+        # Calculate the response time
+        response_time = time.time() - start_time
+        
+        # Prepare the response body
+        try:
+            response_body = response.json()
+        except:
+            response_body = response.text
+        
+        # Return the result
+        return {
+            "status_code": response.status_code,
+            "headers": dict(response.headers),
+            "body": response_body,
+            "time": response_time
+        }
+    
+    except Exception as e:
+        return {"error": str(e)}
+
 st.title("BIAN Use Case Analyzer")
 st.markdown("This tool analyzes banking use cases and maps them to BIAN Service Domains and APIs.")
 
