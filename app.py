@@ -1,14 +1,28 @@
 import streamlit as st
 import yaml
 import io
+import os
 from PIL import Image, ImageDraw, ImageFont
 import base64
 import textwrap
 import math
-from openai import OpenAI
+import openai
 
-# Configure OpenAI API with the new client
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# Configure OpenAI API with a more compatible approach
+# First try to get from streamlit secrets
+api_key = None
+try:
+    api_key = st.secrets["OPENAI_API_KEY"]
+except:
+    # Fallback to environment variable
+    api_key = os.environ.get("OPENAI_API_KEY")
+
+if not api_key:
+    st.error("OpenAI API key not found. Please add it to Streamlit secrets or set the OPENAI_API_KEY environment variable.")
+    st.stop()
+
+# Set the API key directly using environment variable
+os.environ["OPENAI_API_KEY"] = api_key
 
 st.set_page_config(
     page_title="GTC - BIAN Use Case Analyzer",
@@ -63,6 +77,9 @@ def generate_bian_analysis(use_case):
     Provide the response in a well-structured format with clear headings and sections.
     For the Swagger/OpenAPI specification, ensure it's properly formatted as YAML.
     """
+    
+    from openai import OpenAI
+    client = OpenAI()  # This will use the environment variable OPENAI_API_KEY
     
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
