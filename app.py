@@ -78,10 +78,8 @@ def generate_bian_analysis(use_case):
     For the Swagger/OpenAPI specification, ensure it's properly formatted as YAML.
     """
     
-    from openai import OpenAI
-    client = OpenAI()  # This will use the environment variable OPENAI_API_KEY
-    
-    response = client.chat.completions.create(
+    # Use the openai library directly
+    response = openai.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "You are a BIAN architecture expert helping analyze banking use cases."},
