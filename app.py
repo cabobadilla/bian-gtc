@@ -61,6 +61,10 @@ def prev_step():
     if st.session_state.step > 1:
         st.session_state.step -= 1
 
+# Function to set step to a specific value
+def set_step(step_number):
+    st.session_state.step = step_number
+
 # Function to extract sections from the analysis
 def extract_sections(text):
     """
@@ -1882,9 +1886,10 @@ if st.session_state.step == 1:
                         
                         # Add a button to proceed to testing
                         st.success("API ready for testing!")
-                        if st.button("Test this API"):
+                        # Using a unique key and explicit step setting to avoid redirection issues
+                        if st.button("Test this API", key="test_api_button_fixed"):
                             st.session_state.current_api = len(st.session_state.generated_apis) - 1
-                            next_step()
+                            set_step(2)
                 
                 # Tab 5: Architecture
                 with tab5:
