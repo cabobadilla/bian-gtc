@@ -5,41 +5,10 @@ from PIL import Image, ImageDraw, ImageFont
 import base64
 import textwrap
 import math
+from openai import OpenAI
 
-# Configure OpenAI API - handling different versions
-try:
-    # For newer versions of the OpenAI package (>= 1.0.0)
-    from openai import OpenAI
-    client = OpenAI(api_key=st.secrets["openai"]["api_key"])
-    
-    def generate_completion(prompt, system_msg):
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=2500
-        )
-        return response.choices[0].message.content
-        
-except (ImportError, TypeError):
-    # For older versions of the OpenAI package or if the newer method fails
-    import openai
-    openai.api_key = st.secrets["openai"]["api_key"]
-    
-    def generate_completion(prompt, system_msg):
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=2500
-        )
-        return response.choices[0].message.content
+# Configure OpenAI API with the new client
+client = OpenAI(api_key=st.secrets["openai"]["api_key"])
 
 st.set_page_config(
     page_title="GTC - BIAN Use Case Analyzer",
@@ -95,8 +64,17 @@ def generate_bian_analysis(use_case):
     For the Swagger/OpenAPI specification, ensure it's properly formatted as YAML.
     """
     
-    system_msg = "You are a BIAN architecture expert helping analyze banking use cases."
-    return generate_completion(prompt, system_msg)
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a BIAN architecture expert helping analyze banking use cases."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7,
+        max_tokens=2500
+    )
+    
+    return response.choices[0].message.content
 
 def create_architecture_diagram(services, sequence):
     """Create a simple architecture diagram based on the services and sequence"""
