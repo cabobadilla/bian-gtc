@@ -89,6 +89,128 @@ router.get('/debug', (req, res) => {
 
 /**
  * @swagger
+ * /api/auth/login:
+ *   get:
+ *     summary: Login page (temporary frontend bypass)
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Login page HTML
+ */
+router.get('/login', (req, res) => {
+  const loginPage = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>BIAN API Generator - Login</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          margin: 0;
+          padding: 20px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .container {
+          background: white;
+          padding: 40px;
+          border-radius: 12px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+          text-align: center;
+          max-width: 400px;
+          width: 100%;
+        }
+        .logo {
+          font-size: 48px;
+          margin-bottom: 20px;
+        }
+        h1 {
+          color: #333;
+          margin-bottom: 10px;
+        }
+        .description {
+          color: #666;
+          margin-bottom: 30px;
+          line-height: 1.5;
+        }
+        .google-btn {
+          background: #4285f4;
+          color: white;
+          padding: 12px 24px;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 16px;
+          transition: background 0.3s;
+        }
+        .google-btn:hover {
+          background: #3367d6;
+        }
+        .status {
+          background: #fff3e0;
+          padding: 15px;
+          border-radius: 8px;
+          margin: 20px 0;
+          color: #e65100;
+        }
+        .links {
+          margin-top: 30px;
+          padding-top: 20px;
+          border-top: 1px solid #eee;
+        }
+        .links a {
+          color: #1976d2;
+          text-decoration: none;
+          margin: 0 10px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="logo">🏦</div>
+        <h1>BIAN API Generator</h1>
+        <p class="description">
+          Create custom BIAN-compliant APIs with AI assistance
+        </p>
+        
+        <div class="status">
+          <strong>⚠️ Temporary Login Page</strong><br>
+          The frontend is being fixed. Use this temporary login.
+        </div>
+        
+        <a href="/api/auth/google" class="google-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Sign in with Google
+        </a>
+        
+        <div class="links">
+          <a href="/api/docs">📚 API Documentation</a>
+          <a href="/api/health">🏥 Health Check</a>
+          <a href="/api/auth/debug">🔍 Debug Info</a>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  res.send(loginPage);
+});
+
+/**
+ * @swagger
  * /api/auth/google:
  *   get:
  *     summary: Initiate Google OAuth authentication
@@ -140,22 +262,25 @@ router.get('/google/callback',
       if (!req.user) {
         console.error('OAuth callback: No user found');
         
-        if (isDebug) {
-          return res.json({
-            error: 'Authentication failed',
-            debug: {
-              message: 'No user found after Google OAuth',
-              timestamp: new Date().toISOString(),
-              environment: process.env.NODE_ENV
-            }
-          });
-        }
-
-        const frontendUrl = process.env.NODE_ENV === 'production' 
-          ? 'https://bian-api-frontend.onrender.com'
-          : 'http://localhost:3000';
-        
-        return res.redirect(`${frontendUrl}/auth/error?message=Authentication failed`);
+        return res.status(400).send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Authentication Failed</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+              .error { color: #d32f2f; background: #ffebee; padding: 20px; border-radius: 8px; }
+            </style>
+          </head>
+          <body>
+            <div class="error">
+              <h2>❌ Authentication Failed</h2>
+              <p>Unable to authenticate with Google. Please try again.</p>
+              <a href="https://bian-api-backend.onrender.com/api/auth/google">🔄 Try Again</a>
+            </div>
+          </body>
+          </html>
+        `);
       }
 
       // Generate JWT token
@@ -164,58 +289,170 @@ router.get('/google/callback',
       if (isDebug) {
         console.log('Token generated successfully');
         console.log('Token length:', token.length);
-        console.log('Redirecting to frontend...');
+        console.log('Serving success page...');
       }
       
-      // Redirect to frontend with token
-      const frontendUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://bian-api-frontend.onrender.com'
-        : 'http://localhost:3000';
+      // Serve success page directly from backend
+      const successPage = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>BIAN API Generator - Login Successful</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              margin: 0;
+              padding: 20px;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .container {
+              background: white;
+              padding: 40px;
+              border-radius: 12px;
+              box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+              text-align: center;
+              max-width: 500px;
+              width: 100%;
+            }
+            .success-icon {
+              font-size: 64px;
+              margin-bottom: 20px;
+            }
+            h1 {
+              color: #2e7d32;
+              margin-bottom: 10px;
+            }
+            .user-info {
+              background: #f5f5f5;
+              padding: 20px;
+              border-radius: 8px;
+              margin: 20px 0;
+            }
+            .token-info {
+              background: #e3f2fd;
+              padding: 15px;
+              border-radius: 8px;
+              margin: 20px 0;
+              word-break: break-all;
+              font-family: monospace;
+              font-size: 12px;
+            }
+            .btn {
+              background: #1976d2;
+              color: white;
+              padding: 12px 24px;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+              text-decoration: none;
+              display: inline-block;
+              margin: 10px;
+            }
+            .btn:hover {
+              background: #1565c0;
+            }
+            .debug-info {
+              background: #fff3e0;
+              padding: 15px;
+              border-radius: 8px;
+              margin: 20px 0;
+              text-align: left;
+              font-size: 14px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success-icon">✅</div>
+            <h1>Login Successful!</h1>
+            <p>Welcome to BIAN API Generator</p>
+            
+            <div class="user-info">
+              <h3>👤 User Information</h3>
+              <p><strong>Name:</strong> ${req.user.name}</p>
+              <p><strong>Email:</strong> ${req.user.email}</p>
+              <p><strong>Role:</strong> ${req.user.role}</p>
+            </div>
+            
+            <div class="token-info">
+              <h4>🔑 JWT Token (Copy this):</h4>
+              <p>${token}</p>
+            </div>
+            
+            <div style="margin: 30px 0;">
+              <a href="https://bian-api-backend.onrender.com/api/docs" class="btn">
+                📚 View API Documentation
+              </a>
+              <a href="https://bian-api-backend.onrender.com/api/auth/debug" class="btn">
+                🔍 Debug Info
+              </a>
+            </div>
+            
+            ${isDebug ? `
+            <div class="debug-info">
+              <h4>🐛 Debug Information</h4>
+              <p><strong>User ID:</strong> ${req.user._id}</p>
+              <p><strong>Environment:</strong> ${process.env.NODE_ENV}</p>
+              <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+              <p><strong>Backend URL:</strong> https://bian-api-backend.onrender.com</p>
+              <p><strong>Frontend URL:</strong> https://bian-api-frontend.onrender.com (Currently broken)</p>
+            </div>
+            ` : ''}
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+              <h4>📱 Next Steps</h4>
+              <ol style="text-align: left;">
+                <li>Copy the JWT token above</li>
+                <li>Use it in your API requests as Authorization: Bearer [token]</li>
+                <li>Visit the API documentation to test endpoints</li>
+                <li>The frontend will be fixed soon!</li>
+              </ol>
+            </div>
+          </div>
+          
+          <script>
+            // Auto-copy token functionality
+            document.querySelector('.token-info p').addEventListener('click', function() {
+              navigator.clipboard.writeText('${token}').then(function() {
+                alert('Token copied to clipboard!');
+              });
+            });
+          </script>
+        </body>
+        </html>
+      `;
       
-      if (isDebug) {
-        return res.json({
-          success: true,
-          debug: {
-            message: 'Authentication successful',
-            user: {
-              id: req.user._id,
-              email: req.user.email,
-              name: req.user.name
-            },
-            token: token,
-            redirectUrl: `${frontendUrl}/auth/success?token=${token}`,
-            timestamp: new Date().toISOString()
-          }
-        });
-      }
+      res.send(successPage);
       
-      res.redirect(`${frontendUrl}/auth/success?token=${token}`);
     } catch (error) {
       console.error('OAuth callback error:', error);
       console.error('Error stack:', error.stack);
       
-      if (isDebug) {
-        return res.json({
-          error: 'Internal Server Error',
-          debug: {
-            message: error.message,
-            stack: error.stack,
-            timestamp: new Date().toISOString(),
-            environment: process.env.NODE_ENV,
-            jwtSecret: !!process.env.JWT_SECRET,
-            user: req.user ? {
-              id: req.user._id,
-              email: req.user.email
-            } : 'No user'
-          }
-        });
-      }
-      
-      const frontendUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://bian-api-frontend.onrender.com'
-        : 'http://localhost:3000';
-      
-      res.redirect(`${frontendUrl}/auth/error?message=Server error`);
+      res.status(500).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Server Error</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+            .error { color: #d32f2f; background: #ffebee; padding: 20px; border-radius: 8px; }
+          </style>
+        </head>
+        <body>
+          <div class="error">
+            <h2>❌ Server Error</h2>
+            <p>An internal error occurred during authentication.</p>
+            ${isDebug ? `<pre>${error.stack}</pre>` : ''}
+            <a href="https://bian-api-backend.onrender.com/api/auth/google">🔄 Try Again</a>
+          </div>
+        </body>
+        </html>
+      `);
     }
   }
 );
