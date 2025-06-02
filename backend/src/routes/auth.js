@@ -36,6 +36,59 @@ const router = express.Router();
 
 /**
  * @swagger
+ * /api/auth/debug:
+ *   get:
+ *     summary: Debug information (only when DEBUG=ON)
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Debug information
+ *       404:
+ *         description: Debug not enabled
+ */
+router.get('/debug', (req, res) => {
+  const isDebug = process.env.DEBUG === 'ON' || process.env.NODE_ENV === 'development';
+  
+  if (!isDebug) {
+    return res.status(404).json({
+      error: 'Debug mode not enabled'
+    });
+  }
+
+  res.json({
+    debug: true,
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
+    googleOAuth: {
+      clientIdConfigured: !!process.env.GOOGLE_CLIENT_ID,
+      clientSecretConfigured: !!process.env.GOOGLE_CLIENT_SECRET,
+      callbackUrl: process.env.NODE_ENV === 'production' 
+        ? 'https://bian-api-backend.onrender.com/api/auth/google/callback'
+        : 'http://localhost:10000/api/auth/google/callback',
+      frontendUrl: process.env.NODE_ENV === 'production' 
+        ? 'https://bian-api-frontend.onrender.com'
+        : 'http://localhost:3000'
+    },
+    mongodb: {
+      connected: require('mongoose').connection.readyState === 1
+    },
+    jwt: {
+      secretConfigured: !!process.env.JWT_SECRET
+    },
+    instructions: {
+      message: "If you see invalid_grant errors, it means you're reusing an OAuth code. Always start a fresh login from the frontend.",
+      steps: [
+        "1. Go to https://bian-api-frontend.onrender.com",
+        "2. Click 'Sign in with Google'",
+        "3. Complete OAuth flow with fresh code",
+        "4. Check this debug endpoint for any issues"
+      ]
+    }
+  });
+});
+
+/**
+ * @swagger
  * /api/auth/google:
  *   get:
  *     summary: Initiate Google OAuth authentication
