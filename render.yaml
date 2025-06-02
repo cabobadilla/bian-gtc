@@ -28,9 +28,8 @@ services:
         value: 10000
 
   # Frontend Static Site
-  - type: web
+  - type: static
     name: bian-api-frontend
-    env: static
     region: oregon
     plan: free
     rootDirectory: frontend
