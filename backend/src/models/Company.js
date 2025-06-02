@@ -120,10 +120,10 @@ const companySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes
-companySchema.index({ slug: 1 });
-companySchema.index({ 'members.user': 1 });
-companySchema.index({ admins: 1 });
+// Remove duplicate indexes - keeping only essential ones
+// companySchema.index({ slug: 1 }); // REMOVED - already unique: true
+companySchema.index({ 'members.user': 1 }); // Keep this one for queries
+companySchema.index({ admins: 1 }); // Keep this one for queries
 
 // Virtual for API count
 companySchema.virtual('apiCount', {

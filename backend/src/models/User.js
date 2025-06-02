@@ -60,10 +60,6 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for better query performance
-userSchema.index({ email: 1 });
-userSchema.index({ googleId: 1 });
-
 // Virtual for user's API count
 userSchema.virtual('apiCount', {
   ref: 'API',
