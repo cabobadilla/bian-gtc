@@ -4,6 +4,14 @@ import toast from 'react-hot-toast'
 // Get backend URL from environment variable (with fallback for development)
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
+// Debug logging
+const isDebug = import.meta.env.VITE_DEBUG === 'ON' || import.meta.env.DEBUG === 'ON'
+
+if (isDebug) {
+  console.log('🐛 Frontend Debug mode enabled')
+  console.log('🔗 API URL:', API_URL)
+}
+
 // Create axios instance
 const api = axios.create({
   baseURL: `${API_URL}/api`,
@@ -16,28 +24,63 @@ const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
+    if (isDebug) {
+      console.log(`🚀 [API REQUEST] ${config.method?.toUpperCase()} ${config.url}`, {
+        data: config.data,
+        params: config.params,
+        headers: config.headers
+      })
+    }
+
     const authStorage = localStorage.getItem('auth-storage')
     if (authStorage) {
       try {
         const { state } = JSON.parse(authStorage)
         if (state.token) {
           config.headers.Authorization = `Bearer ${state.token}`
+          if (isDebug) {
+            console.log('🔑 [API REQUEST] Auth token added')
+          }
         }
       } catch (error) {
         console.error('Error parsing auth storage:', error)
+        if (isDebug) {
+          console.error('❌ [API REQUEST] Failed to parse auth storage:', error)
+        }
       }
     }
     return config
   },
   (error) => {
+    if (isDebug) {
+      console.error('❌ [API REQUEST] Request interceptor error:', error)
+    }
     return Promise.reject(error)
   }
 )
 
 // Response interceptor to handle errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (isDebug) {
+      console.log(`✅ [API RESPONSE] ${response.config.method?.toUpperCase()} ${response.config.url}`, {
+        status: response.status,
+        data: response.data,
+        headers: response.headers
+      })
+    }
+    return response
+  },
   (error) => {
+    if (isDebug) {
+      console.error(`❌ [API ERROR] ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+        code: error.code
+      })
+    }
+
     if (error.response?.status === 401) {
       // Clear auth and redirect to login
       localStorage.removeItem('auth-storage')
@@ -64,9 +107,18 @@ export const authService = {
 
 // Company services
 export const companyService = {
-  getMyCompanies: () => api.get('/companies/my'),
-  getCompany: (id) => api.get(`/companies/${id}`),
-  createCompany: (data) => api.post('/companies', data),
+  getMyCompanies: () => {
+    if (isDebug) console.log('🏢 [COMPANY SERVICE] Getting my companies...')
+    return api.get('/companies/my')
+  },
+  getCompany: (id) => {
+    if (isDebug) console.log('🏢 [COMPANY SERVICE] Getting company:', id)
+    return api.get(`/companies/${id}`)
+  },
+  createCompany: (data) => {
+    if (isDebug) console.log('🏢 [COMPANY SERVICE] Creating company:', data)
+    return api.post('/companies', data)
+  },
 }
 
 // API services

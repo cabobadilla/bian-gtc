@@ -37,4 +37,6 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        value: https://bian-api-backend.onrender.com 
+        value: https://bian-api-backend.onrender.com
+      - key: VITE_DEBUG
+        value: "ON" 

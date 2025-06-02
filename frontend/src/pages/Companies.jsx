@@ -35,6 +35,8 @@ import toast from 'react-hot-toast'
 
 import { companyService } from '../services/api'
 
+const isDebug = import.meta.env.VITE_DEBUG === 'ON' || import.meta.env.DEBUG === 'ON'
+
 const Companies = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -47,17 +49,41 @@ const Companies = () => {
     country: ''
   })
 
+  if (isDebug) {
+    console.log('🏢 [COMPANIES PAGE] Component rendered')
+  }
+
   // Get user's companies
   const { data: companiesData, isLoading } = useQuery(
     'my-companies',
-    companyService.getMyCompanies
+    companyService.getMyCompanies,
+    {
+      onSuccess: (data) => {
+        if (isDebug) {
+          console.log('✅ [COMPANIES PAGE] Companies loaded:', data)
+        }
+      },
+      onError: (error) => {
+        if (isDebug) {
+          console.error('❌ [COMPANIES PAGE] Failed to load companies:', error)
+        }
+      }
+    }
   )
 
   // Create company mutation
   const createCompanyMutation = useMutation(
     companyService.createCompany,
     {
+      onMutate: (variables) => {
+        if (isDebug) {
+          console.log('🚀 [COMPANIES PAGE] Creating company with data:', variables)
+        }
+      },
       onSuccess: (data) => {
+        if (isDebug) {
+          console.log('✅ [COMPANIES PAGE] Company created successfully:', data)
+        }
         toast.success('Empresa creada exitosamente')
         setOpenCreateDialog(false)
         setCompanyForm({
@@ -71,12 +97,23 @@ const Companies = () => {
         queryClient.invalidateQueries('dashboard')
       },
       onError: (error) => {
+        if (isDebug) {
+          console.error('❌ [COMPANIES PAGE] Failed to create company:', {
+            error,
+            response: error.response?.data,
+            status: error.response?.status,
+            message: error.message
+          })
+        }
         toast.error(error.response?.data?.error || 'Error al crear empresa')
       }
     }
   )
 
   const handleInputChange = (field, value) => {
+    if (isDebug) {
+      console.log(`📝 [COMPANIES PAGE] Form field changed: ${field} = ${value}`)
+    }
     setCompanyForm(prev => ({
       ...prev,
       [field]: value
@@ -84,9 +121,21 @@ const Companies = () => {
   }
 
   const handleCreateCompany = () => {
+    if (isDebug) {
+      console.log('🎯 [COMPANIES PAGE] Create company button clicked')
+      console.log('📋 [COMPANIES PAGE] Form data:', companyForm)
+    }
+
     if (!companyForm.name.trim()) {
+      if (isDebug) {
+        console.log('❌ [COMPANIES PAGE] Validation failed: name is empty')
+      }
       toast.error('El nombre de la empresa es requerido')
       return
+    }
+
+    if (isDebug) {
+      console.log('✅ [COMPANIES PAGE] Validation passed, submitting...')
     }
 
     createCompanyMutation.mutate(companyForm)

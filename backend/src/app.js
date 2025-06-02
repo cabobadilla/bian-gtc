@@ -21,14 +21,29 @@ const bianReferenceRoutes = require('./routes/bianReference');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// Trust proxy for Render.com deployment
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
+// Debug logging
+const isDebug = process.env.DEBUG === 'ON';
+if (isDebug) {
+  console.log('🐛 Debug mode enabled');
+}
+
 // Connect to MongoDB
 connectDB();
 
-// Rate limiting
+// Rate limiting with proper proxy configuration
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Skip rate limiting in development
+  skip: (req) => process.env.NODE_ENV !== 'production'
 });
 
 // Middleware
@@ -46,13 +61,30 @@ app.use(helmet({
 
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://bian-api-frontend.onrender.com']
+    ? ['https://bian-api-frontend.onrender.com', 'https://bian-gtc.onrender.com']
     : ['http://localhost:3000', 'http://localhost:5173'],
   credentials: true
 }));
 
 app.use(compression());
-app.use(morgan('combined'));
+
+// Enhanced logging with debug info
+if (isDebug) {
+  app.use(morgan('combined'));
+  app.use((req, res, next) => {
+    console.log(`🔍 [${new Date().toISOString()}] ${req.method} ${req.path}`, {
+      headers: req.headers,
+      body: req.body,
+      query: req.query,
+      ip: req.ip,
+      ips: req.ips
+    });
+    next();
+  });
+} else {
+  app.use(morgan('combined'));
+}
+
 app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
