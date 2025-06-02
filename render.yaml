@@ -5,8 +5,9 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: cd backend && npm install
-    startCommand: cd backend && npm start
+    rootDirectory: backend
+    buildCommand: npm install
+    startCommand: npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
@@ -30,8 +31,9 @@ services:
     env: static
     region: oregon
     plan: free
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: ./frontend/dist
+    rootDirectory: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
     pullRequestPreviewsEnabled: false
     envVars:
       - key: VITE_API_URL
