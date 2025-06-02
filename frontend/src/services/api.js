@@ -80,6 +80,16 @@ export const apiService = {
   enrichAPI: (id, data) => api.post(`/apis/${id}/enrich`, data),
 }
 
+// BIAN Reference services
+export const bianService = {
+  searchAPIs: (params = {}) => api.get('/bian/search', { params }),
+  getAPIDetails: (id, params = {}) => api.get(`/bian/${id}`, { params }),
+  explainAPI: (id, data) => api.post(`/bian/${id}/explain`, data),
+  getServiceDomains: () => api.get('/bian/domains'),
+  getPopularAPIs: (limit = 10) => api.get('/bian/popular', { params: { limit } }),
+  createAPIFromReference: (id, data) => api.post(`/bian/${id}/create-api`, data),
+}
+
 // User services
 export const userService = {
   getDashboard: () => api.get('/users/dashboard'),

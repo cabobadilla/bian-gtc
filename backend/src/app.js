@@ -16,6 +16,7 @@ const authRoutes = require('./routes/auth');
 const companyRoutes = require('./routes/companies');
 const apiRoutes = require('./routes/apis');
 const userRoutes = require('./routes/users');
+const bianReferenceRoutes = require('./routes/bianReference');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -107,6 +108,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/apis', apiRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/bian', bianReferenceRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

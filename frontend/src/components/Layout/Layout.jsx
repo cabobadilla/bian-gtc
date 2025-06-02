@@ -1,13 +1,21 @@
 import React from 'react'
-import { Outlet } from 'react-router-dom'
-import { Box, AppBar, Toolbar, Typography, Button, Avatar } from '@mui/material'
+import { Outlet, Link, useLocation } from 'react-router-dom'
+import { Box, AppBar, Toolbar, Typography, Button, Avatar, Tabs, Tab } from '@mui/material'
 import { useAuthStore } from '../../store/authStore'
 
 const Layout = () => {
   const { user, logout } = useAuthStore()
+  const location = useLocation()
 
   const handleLogout = () => {
     logout()
+  }
+
+  const getCurrentTab = () => {
+    if (location.pathname === '/dashboard') return 0
+    if (location.pathname === '/bian-search') return 1
+    if (location.pathname.startsWith('/companies')) return 2
+    return 0
   }
 
   return (
@@ -34,6 +42,36 @@ const Layout = () => {
             </Box>
           )}
         </Toolbar>
+        
+        {/* Navigation Tabs */}
+        {user && (
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'rgba(255,255,255,0.1)' }}>
+            <Tabs 
+              value={getCurrentTab()} 
+              textColor="inherit"
+              TabIndicatorProps={{ style: { backgroundColor: 'white' } }}
+            >
+              <Tab 
+                label="Dashboard" 
+                component={Link} 
+                to="/dashboard"
+                sx={{ color: 'white' }}
+              />
+              <Tab 
+                label="🔍 Buscar APIs BIAN" 
+                component={Link} 
+                to="/bian-search"
+                sx={{ color: 'white' }}
+              />
+              <Tab 
+                label="Empresas" 
+                component={Link} 
+                to="/companies"
+                sx={{ color: 'white' }}
+              />
+            </Tabs>
+          </Box>
+        )}
       </AppBar>
 
       <Box component="main" sx={{ flexGrow: 1, p: 3 }}>

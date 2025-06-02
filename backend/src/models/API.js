@@ -142,6 +142,23 @@ const apiSchema = new mongoose.Schema({
       }
     }]
   },
+  baseReference: {
+    type: {
+      type: String,
+      enum: ['bian', 'template', 'scratch'],
+      default: 'scratch'
+    },
+    referenceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'BIANReferenceAPI'
+    },
+    referenceName: {
+      type: String
+    },
+    createdFromReference: {
+      type: Date
+    }
+  },
   isActive: {
     type: Boolean,
     default: true

@@ -14,6 +14,7 @@ import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
 import AuthSuccess from './pages/AuthSuccess'
 import AuthError from './pages/AuthError'
+import BIANSearch from './pages/BIANSearch'
 import Companies from './pages/Companies'
 import CompanyDetail from './pages/CompanyDetail'
 import APIs from './pages/APIs'
@@ -42,6 +43,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/dashboard" />} />
             <Route path="dashboard" element={<Dashboard />} />
+            <Route path="bian-search" element={<BIANSearch />} />
             <Route path="companies" element={<Companies />} />
             <Route path="companies/:companyId" element={<CompanyDetail />} />
             <Route path="companies/:companyId/apis" element={<APIs />} />
