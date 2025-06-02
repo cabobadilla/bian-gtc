@@ -56,6 +56,12 @@ router.get('/google',
  *   get:
  *     summary: Google OAuth callback
  *     tags: [Authentication]
+ *     parameters:
+ *       - in: query
+ *         name: code
+ *         schema:
+ *           type: string
+ *         description: Authorization code from Google
  *     responses:
  *       302:
  *         description: Redirect to frontend with token
@@ -65,8 +71,33 @@ router.get('/google',
 router.get('/google/callback',
   passport.authenticate('google', { session: false }),
   (req, res) => {
+    const isDebug = process.env.DEBUG === 'ON' || process.env.NODE_ENV === 'development';
+    
     try {
+      if (isDebug) {
+        console.log('=== GOOGLE OAUTH CALLBACK DEBUG ===');
+        console.log('User from passport:', req.user ? 'User found' : 'No user');
+        console.log('User ID:', req.user?._id);
+        console.log('User email:', req.user?.email);
+        console.log('User name:', req.user?.name);
+        console.log('Environment:', process.env.NODE_ENV);
+        console.log('JWT_SECRET available:', !!process.env.JWT_SECRET);
+      }
+
       if (!req.user) {
+        console.error('OAuth callback: No user found');
+        
+        if (isDebug) {
+          return res.json({
+            error: 'Authentication failed',
+            debug: {
+              message: 'No user found after Google OAuth',
+              timestamp: new Date().toISOString(),
+              environment: process.env.NODE_ENV
+            }
+          });
+        }
+
         const frontendUrl = process.env.NODE_ENV === 'production' 
           ? 'https://bian-api-frontend.onrender.com'
           : 'http://localhost:3000';
@@ -77,14 +108,56 @@ router.get('/google/callback',
       // Generate JWT token
       const token = generateToken(req.user._id);
       
+      if (isDebug) {
+        console.log('Token generated successfully');
+        console.log('Token length:', token.length);
+        console.log('Redirecting to frontend...');
+      }
+      
       // Redirect to frontend with token
       const frontendUrl = process.env.NODE_ENV === 'production' 
         ? 'https://bian-api-frontend.onrender.com'
         : 'http://localhost:3000';
       
+      if (isDebug) {
+        return res.json({
+          success: true,
+          debug: {
+            message: 'Authentication successful',
+            user: {
+              id: req.user._id,
+              email: req.user.email,
+              name: req.user.name
+            },
+            token: token,
+            redirectUrl: `${frontendUrl}/auth/success?token=${token}`,
+            timestamp: new Date().toISOString()
+          }
+        });
+      }
+      
       res.redirect(`${frontendUrl}/auth/success?token=${token}`);
     } catch (error) {
       console.error('OAuth callback error:', error);
+      console.error('Error stack:', error.stack);
+      
+      if (isDebug) {
+        return res.json({
+          error: 'Internal Server Error',
+          debug: {
+            message: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString(),
+            environment: process.env.NODE_ENV,
+            jwtSecret: !!process.env.JWT_SECRET,
+            user: req.user ? {
+              id: req.user._id,
+              email: req.user.email
+            } : 'No user'
+          }
+        });
+      }
+      
       const frontendUrl = process.env.NODE_ENV === 'production' 
         ? 'https://bian-api-frontend.onrender.com'
         : 'http://localhost:3000';
