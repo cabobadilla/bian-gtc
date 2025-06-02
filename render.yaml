@@ -1,0 +1,40 @@
+services:
+  # Backend API Service
+  - type: web
+    name: bian-api-backend
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        fromSecret: true
+      - key: GOOGLE_CLIENT_ID
+        fromSecret: true
+      - key: GOOGLE_CLIENT_SECRET
+        fromSecret: true
+      - key: OPENAI_API_KEY
+        fromSecret: true
+      - key: JWT_SECRET
+        fromSecret: true
+      - key: PORT
+        value: 10000
+
+  # Frontend Static Site
+  - type: web
+    name: bian-api-frontend
+    env: static
+    region: oregon
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: VITE_API_URL
+        value: https://bian-api-backend.onrender.com
+      - key: VITE_GOOGLE_CLIENT_ID
+        fromSecret: true 
