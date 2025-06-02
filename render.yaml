@@ -33,7 +33,7 @@ services:
     region: oregon
     plan: free
     rootDirectory: frontend
-    buildCommand: npm install && npm run build
+    buildCommand: npm install && npm audit fix --force && npm run build
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
