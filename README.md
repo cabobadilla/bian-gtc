@@ -223,11 +223,12 @@ cd frontend
 npm install
 ```
 
-Crear archivo `.env.local`:
+**Para desarrollo local**, crear archivo `.env.local`:
 ```
 VITE_API_URL=http://localhost:10000
-VITE_GOOGLE_CLIENT_ID=...
 ```
+
+> **Nota**: En producción (Render.com), el frontend usa automáticamente `https://bian-api-backend.onrender.com` sin necesidad de configurar variables de entorno.
 
 Ejecutar:
 ```bash
