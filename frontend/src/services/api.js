@@ -1,8 +1,8 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
-const API_URL = import.meta.env.VITE_API_URL || 
-  (import.meta.env.DEV ? 'http://localhost:10000' : 'https://bian-api-backend.onrender.com')
+// Get backend URL from environment variable (with fallback for development)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
 // Create axios instance
 const api = axios.create({

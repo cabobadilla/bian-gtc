@@ -1,10 +1,11 @@
 import React from 'react'
 import { Box, Container, Card, CardContent, Typography, Button } from '@mui/material'
-import { Google } from '@mui/icons-material'
+import { Google as GoogleIcon } from '@mui/icons-material'
+
+// Get backend URL from environment variable (with fallback for development)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
 const Login = () => {
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000'
-
   const handleGoogleLogin = () => {
     window.location.href = `${API_URL}/api/auth/google`
   }
@@ -35,7 +36,7 @@ const Login = () => {
               fullWidth
               variant="contained"
               size="large"
-              startIcon={<Google />}
+              startIcon={<GoogleIcon />}
               onClick={handleGoogleLogin}
               sx={{ py: 1.5 }}
             >
