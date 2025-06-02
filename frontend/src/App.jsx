@@ -12,7 +12,8 @@ import LoadingScreen from './components/LoadingScreen'
 // Pages
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
-import AuthCallback from './pages/AuthCallback'
+import AuthSuccess from './pages/AuthSuccess'
+import AuthError from './pages/AuthError'
 import Companies from './pages/Companies'
 import CompanyDetail from './pages/CompanyDetail'
 import APIs from './pages/APIs'
@@ -33,8 +34,8 @@ function App() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
-        <Route path="/auth/success" element={<AuthCallback />} />
-        <Route path="/auth/error" element={<AuthCallback />} />
+        <Route path="/auth/success" element={<AuthSuccess />} />
+        <Route path="/auth/error" element={<AuthError />} />
         
         {/* Protected routes */}
         {user ? (

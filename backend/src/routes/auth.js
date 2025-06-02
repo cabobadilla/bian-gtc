@@ -261,26 +261,8 @@ router.get('/google/callback',
 
       if (!req.user) {
         console.error('OAuth callback: No user found');
-        
-        return res.status(400).send(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Authentication Failed</title>
-            <style>
-              body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-              .error { color: #d32f2f; background: #ffebee; padding: 20px; border-radius: 8px; }
-            </style>
-          </head>
-          <body>
-            <div class="error">
-              <h2>❌ Authentication Failed</h2>
-              <p>Unable to authenticate with Google. Please try again.</p>
-              <a href="https://bian-api-backend.onrender.com/api/auth/google">🔄 Try Again</a>
-            </div>
-          </body>
-          </html>
-        `);
+        // Redirect to frontend with error
+        return res.redirect('https://bian-gtc.onrender.com/auth/error?message=authentication_failed');
       }
 
       // Generate JWT token
@@ -289,170 +271,29 @@ router.get('/google/callback',
       if (isDebug) {
         console.log('Token generated successfully');
         console.log('Token length:', token.length);
-        console.log('Serving success page...');
+        console.log('Redirecting to frontend with token...');
       }
       
-      // Serve success page directly from backend
-      const successPage = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>BIAN API Generator - Login Successful</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              margin: 0;
-              padding: 20px;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            }
-            .container {
-              background: white;
-              padding: 40px;
-              border-radius: 12px;
-              box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-              text-align: center;
-              max-width: 500px;
-              width: 100%;
-            }
-            .success-icon {
-              font-size: 64px;
-              margin-bottom: 20px;
-            }
-            h1 {
-              color: #2e7d32;
-              margin-bottom: 10px;
-            }
-            .user-info {
-              background: #f5f5f5;
-              padding: 20px;
-              border-radius: 8px;
-              margin: 20px 0;
-            }
-            .token-info {
-              background: #e3f2fd;
-              padding: 15px;
-              border-radius: 8px;
-              margin: 20px 0;
-              word-break: break-all;
-              font-family: monospace;
-              font-size: 12px;
-            }
-            .btn {
-              background: #1976d2;
-              color: white;
-              padding: 12px 24px;
-              border: none;
-              border-radius: 6px;
-              cursor: pointer;
-              text-decoration: none;
-              display: inline-block;
-              margin: 10px;
-            }
-            .btn:hover {
-              background: #1565c0;
-            }
-            .debug-info {
-              background: #fff3e0;
-              padding: 15px;
-              border-radius: 8px;
-              margin: 20px 0;
-              text-align: left;
-              font-size: 14px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="success-icon">✅</div>
-            <h1>Login Successful!</h1>
-            <p>Welcome to BIAN API Generator</p>
-            
-            <div class="user-info">
-              <h3>👤 User Information</h3>
-              <p><strong>Name:</strong> ${req.user.name}</p>
-              <p><strong>Email:</strong> ${req.user.email}</p>
-              <p><strong>Role:</strong> ${req.user.role}</p>
-            </div>
-            
-            <div class="token-info">
-              <h4>🔑 JWT Token (Copy this):</h4>
-              <p>${token}</p>
-            </div>
-            
-            <div style="margin: 30px 0;">
-              <a href="https://bian-api-backend.onrender.com/api/docs" class="btn">
-                📚 View API Documentation
-              </a>
-              <a href="https://bian-api-backend.onrender.com/api/auth/debug" class="btn">
-                🔍 Debug Info
-              </a>
-            </div>
-            
-            ${isDebug ? `
-            <div class="debug-info">
-              <h4>🐛 Debug Information</h4>
-              <p><strong>User ID:</strong> ${req.user._id}</p>
-              <p><strong>Environment:</strong> ${process.env.NODE_ENV}</p>
-              <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
-              <p><strong>Backend URL:</strong> https://bian-api-backend.onrender.com</p>
-              <p><strong>Frontend URL:</strong> https://bian-api-frontend.onrender.com (Currently broken)</p>
-            </div>
-            ` : ''}
-            
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-              <h4>📱 Next Steps</h4>
-              <ol style="text-align: left;">
-                <li>Copy the JWT token above</li>
-                <li>Use it in your API requests as Authorization: Bearer [token]</li>
-                <li>Visit the API documentation to test endpoints</li>
-                <li>The frontend will be fixed soon!</li>
-              </ol>
-            </div>
-          </div>
-          
-          <script>
-            // Auto-copy token functionality
-            document.querySelector('.token-info p').addEventListener('click', function() {
-              navigator.clipboard.writeText('${token}').then(function() {
-                alert('Token copied to clipboard!');
-              });
-            });
-          </script>
-        </body>
-        </html>
-      `;
+      // Redirect to frontend with token and user info
+      const frontendUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://bian-gtc.onrender.com'
+        : 'http://localhost:3000';
       
-      res.send(successPage);
+      const redirectUrl = `${frontendUrl}/auth/success?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify({
+        id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        role: req.user.role
+      }))}`;
+      
+      res.redirect(redirectUrl);
       
     } catch (error) {
       console.error('OAuth callback error:', error);
       console.error('Error stack:', error.stack);
       
-      res.status(500).send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Server Error</title>
-          <style>
-            body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-            .error { color: #d32f2f; background: #ffebee; padding: 20px; border-radius: 8px; }
-          </style>
-        </head>
-        <body>
-          <div class="error">
-            <h2>❌ Server Error</h2>
-            <p>An internal error occurred during authentication.</p>
-            ${isDebug ? `<pre>${error.stack}</pre>` : ''}
-            <a href="https://bian-api-backend.onrender.com/api/auth/google">🔄 Try Again</a>
-          </div>
-        </body>
-        </html>
-      `);
+      // Redirect to frontend with error
+      res.redirect('https://bian-gtc.onrender.com/auth/error?message=server_error');
     }
   }
 );
