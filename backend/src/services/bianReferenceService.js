@@ -1212,6 +1212,220 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
     
     return mappings[serviceDomain] || 'other';
   }
+
+  /**
+   * Intelligent analysis for API customization
+   * Used by the wizard to understand user requirements and provide recommendations
+   */
+  async intelligentAnalysis(query, options = {}) {
+    const {
+      language = 'es',
+      context = {},
+      includeInterpretation = true,
+      includeRecommendations = true
+    } = options;
+
+    const isDebug = process.env.NODE_ENV === 'development';
+
+    if (isDebug) {
+      console.log('🧠 [INTELLIGENT ANALYSIS] Starting analysis:', {
+        query: query.substring(0, 100) + (query.length > 100 ? '...' : ''),
+        language,
+        contextKeys: Object.keys(context)
+      });
+    }
+
+    try {
+      // Prepare the analysis prompt
+      const systemPrompt = language === 'es' ? `
+        Eres un experto en APIs BIAN y análisis de requerimientos de negocio.
+        Tu tarea es analizar las necesidades del usuario y proporcionar recomendaciones técnicas.
+        
+        Debes responder en formato JSON con esta estructura:
+        {
+          "interpretation": "Análisis detallado de lo que el usuario necesita",
+          "businessDomain": "Dominio de negocio identificado",
+          "dataType": "Tipo de datos sugerido (simple_field | schema_array)",
+          "technicalRecommendation": "Recomendación técnica específica",
+          "suggestedFields": [
+            {
+              "name": "nombreCampo",
+              "type": "string|number|boolean|array|object",
+              "description": "Descripción del campo",
+              "required": true|false,
+              "example": "Ejemplo de valor"
+            }
+          ],
+          "implementationNotes": "Notas sobre la implementación"
+        }
+      ` : `
+        You are an expert in BIAN APIs and business requirements analysis.
+        Your task is to analyze user needs and provide technical recommendations.
+        
+        You must respond in JSON format with this structure:
+        {
+          "interpretation": "Detailed analysis of what the user needs",
+          "businessDomain": "Identified business domain",
+          "dataType": "Suggested data type (simple_field | schema_array)",
+          "technicalRecommendation": "Specific technical recommendation",
+          "suggestedFields": [
+            {
+              "name": "fieldName",
+              "type": "string|number|boolean|array|object",
+              "description": "Field description",
+              "required": true|false,
+              "example": "Example value"
+            }
+          ],
+          "implementationNotes": "Implementation notes"
+        }
+      `;
+
+      const userPrompt = language === 'es' ? `
+        Analiza esta solicitud de personalización de API:
+        
+        Solicitud del usuario: "${query}"
+        
+        ${context.apiName ? `API base: ${context.apiName}` : ''}
+        ${context.serviceDomain ? `Dominio de servicio: ${context.serviceDomain}` : ''}
+        ${context.originalOperations ? `Operaciones existentes: ${context.originalOperations.join(', ')}` : ''}
+        ${context.businessRequirements ? `Requerimientos adicionales: ${context.businessRequirements.join(', ')}` : ''}
+        
+        Proporciona un análisis detallado y sugerencias de campos específicos.
+      ` : `
+        Analyze this API customization request:
+        
+        User request: "${query}"
+        
+        ${context.apiName ? `Base API: ${context.apiName}` : ''}
+        ${context.serviceDomain ? `Service domain: ${context.serviceDomain}` : ''}
+        ${context.originalOperations ? `Existing operations: ${context.originalOperations.join(', ')}` : ''}
+        ${context.businessRequirements ? `Additional requirements: ${context.businessRequirements.join(', ')}` : ''}
+        
+        Provide detailed analysis and specific field suggestions.
+      `;
+
+      // Call OpenAI
+      const response = await this.callOpenAI([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ], {
+        temperature: 0.3,
+        max_tokens: 1500
+      });
+
+      if (isDebug) {
+        console.log('🤖 [INTELLIGENT ANALYSIS] AI Response received');
+      }
+
+      // Parse the JSON response
+      let analysisResult;
+      try {
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          analysisResult = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error('No JSON found in response');
+        }
+      } catch (parseError) {
+        if (isDebug) {
+          console.log('⚠️ [INTELLIGENT ANALYSIS] JSON parse failed, creating fallback response');
+        }
+        
+        // Fallback response
+        analysisResult = {
+          interpretation: language === 'es' ? 
+            `Análisis de la solicitud: ${query}. Se recomienda agregar campos personalizados según los requerimientos específicos.` :
+            `Analysis of request: ${query}. It's recommended to add custom fields according to specific requirements.`,
+          businessDomain: context.serviceDomain || 'General',
+          dataType: query.toLowerCase().includes('array') || query.toLowerCase().includes('list') || query.toLowerCase().includes('multiple') ? 'schema_array' : 'simple_field',
+          technicalRecommendation: language === 'es' ? 
+            'Se sugiere implementar como campos adicionales en el payload existente.' :
+            'It\'s suggested to implement as additional fields in the existing payload.',
+          suggestedFields: [
+            {
+              name: 'customField',
+              type: 'string',
+              description: language === 'es' ? 'Campo personalizado basado en la solicitud' : 'Custom field based on the request',
+              required: false,
+              example: 'example value'
+            }
+          ],
+          implementationNotes: language === 'es' ? 
+            'Considerar la integración con sistemas existentes y validaciones necesarias.' :
+            'Consider integration with existing systems and necessary validations.'
+        };
+      }
+
+      if (isDebug) {
+        console.log('✅ [INTELLIGENT ANALYSIS] Analysis completed successfully');
+      }
+
+      return {
+        interpretation: analysisResult.interpretation,
+        analysis: analysisResult,
+        recommendations: [
+          {
+            type: 'simple_field',
+            title: language === 'es' ? 'Campo Simple' : 'Simple Field',
+            description: analysisResult.technicalRecommendation,
+            complexity: language === 'es' ? 'Baja' : 'Low',
+            impact: language === 'es' ? 'Mínimo - Se integra fácilmente con la estructura actual' : 'Minimal - Integrates easily with current structure',
+            suggestedFields: analysisResult.suggestedFields.filter(f => ['string', 'number', 'boolean'].includes(f.type))
+          },
+          {
+            type: 'schema_array',
+            title: language === 'es' ? 'Esquema Complejo' : 'Complex Schema',
+            description: language === 'es' ? 
+              `Crear un nuevo esquema para "${query}" con múltiples propiedades relacionadas` :
+              `Create a new schema for "${query}" with multiple related properties`,
+            complexity: language === 'es' ? 'Media' : 'Medium',
+            impact: language === 'es' ? 'Moderado - Requiere un nuevo componente en el OpenAPI' : 'Moderate - Requires a new component in OpenAPI',
+            suggestedFields: analysisResult.suggestedFields
+          }
+        ],
+        timestamp: new Date().toISOString()
+      };
+
+    } catch (error) {
+      console.error('❌ [INTELLIGENT ANALYSIS] Error:', error);
+      
+      // Return fallback response
+      return {
+        interpretation: language === 'es' ? 
+          `Análisis básico de la solicitud: "${query}". Se recomienda revisar manualmente los requerimientos.` :
+          `Basic analysis of request: "${query}". Manual review of requirements is recommended.`,
+        analysis: {
+          interpretation: language === 'es' ? 'Error en el análisis automatizado, se requiere revisión manual.' : 'Error in automated analysis, manual review required.',
+          businessDomain: context.serviceDomain || 'General',
+          dataType: 'simple_field',
+          technicalRecommendation: language === 'es' ? 'Definir campos manualmente según requerimientos.' : 'Define fields manually according to requirements.',
+          suggestedFields: [],
+          implementationNotes: language === 'es' ? 'Contactar al equipo técnico para asistencia.' : 'Contact technical team for assistance.'
+        },
+        recommendations: [
+          {
+            type: 'simple_field',
+            title: language === 'es' ? 'Campo Simple' : 'Simple Field',
+            description: language === 'es' ? 'Agregar campos simples según requerimientos' : 'Add simple fields according to requirements',
+            complexity: language === 'es' ? 'Baja' : 'Low',
+            impact: language === 'es' ? 'Mínimo' : 'Minimal',
+            suggestedFields: []
+          },
+          {
+            type: 'schema_array',
+            title: language === 'es' ? 'Esquema Complejo' : 'Complex Schema',
+            description: language === 'es' ? 'Crear esquema personalizado' : 'Create custom schema',
+            complexity: language === 'es' ? 'Media' : 'Medium',
+            impact: language === 'es' ? 'Moderado' : 'Moderate',
+            suggestedFields: []
+          }
+        ],
+        timestamp: new Date().toISOString(),
+        error: true
+      };
+    }
+  }
 }
 
 module.exports = new BIANReferenceService(); 

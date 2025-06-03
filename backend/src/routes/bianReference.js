@@ -113,7 +113,7 @@ router.get('/search', verifyToken, async (req, res) => {
  * @swagger
  * /api/bian/intelligent-search:
  *   post:
- *     summary: Advanced AI-powered search with natural language understanding
+ *     summary: Intelligent search for API customization context
  *     tags: [BIAN Reference]
  *     security:
  *       - BearerAuth: []
@@ -123,87 +123,68 @@ router.get('/search', verifyToken, async (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
- *             required: [query]
  *             properties:
  *               query:
  *                 type: string
- *                 description: Natural language search query
- *                 example: "I need APIs for managing customer profiles and their transaction history"
- *               serviceDomain:
- *                 type: string
- *                 description: Preferred BIAN service domain
- *               complexity:
- *                 type: string
- *                 enum: [low, medium, high]
- *                 description: Preferred complexity level
+ *                 description: The natural language query for AI analysis
  *               language:
  *                 type: string
  *                 enum: [en, es]
- *                 default: en
+ *                 default: es
  *               context:
  *                 type: object
- *                 description: Additional context for better understanding
- *                 properties:
- *                   businessRequirements:
- *                     type: array
- *                     items:
- *                       type: string
- *                   technicalConstraints:
- *                     type: array
- *                     items:
- *                       type: string
- *                   integrationNeeds:
- *                     type: array
- *                     items:
- *                       type: string
+ *                 description: Additional context for analysis
  *     responses:
  *       200:
- *         description: Intelligent search results with detailed interpretation
+ *         description: AI analysis and interpretation
  *       400:
- *         description: Invalid request parameters
+ *         description: Invalid request
+ *       401:
+ *         description: Authentication required
+ *       500:
+ *         description: Server error
  */
 router.post('/intelligent-search', verifyToken, async (req, res) => {
   try {
-    const { query, serviceDomain, complexity, language = 'en', context = {} } = req.body;
+    const { query, language = 'es', context = {} } = req.body;
 
-    if (!query || query.trim().length === 0) {
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Search query is required'
+        error: 'Query is required for intelligent search'
       });
     }
 
-    const result = await bianReferenceService.generateIntelligentBIANSuggestions(query, {
-      serviceDomain,
-      complexity,
-      language,
-      limit: 8,
-      context
-    });
-
-    if (!result.success) {
-      return res.status(400).json(result);
+    const isDebug = process.env.NODE_ENV === 'development';
+    
+    if (isDebug) {
+      console.log('🤖 [INTELLIGENT SEARCH] Processing request:', {
+        query: query.substring(0, 100) + (query.length > 100 ? '...' : ''),
+        language,
+        context
+      });
     }
+
+    // Call the intelligent search service
+    const result = await bianReferenceService.intelligentAnalysis(query, {
+      language,
+      context,
+      includeInterpretation: true,
+      includeRecommendations: true
+    });
 
     res.json({
       success: true,
-      results: result.suggestions,
-      count: result.suggestions.length,
-      source: 'ai-intelligent',
-      interpretation: result.interpretation,
-      metadata: {
-        processingTime: new Date().toISOString(),
-        model: 'gpt-4o-mini',
-        contextUsed: Object.keys(context).length > 0
-      }
+      data: result,
+      timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Intelligent search error:', error);
+    console.error('❌ [INTELLIGENT SEARCH] Error:', error);
     res.status(500).json({
       success: false,
-      error: 'Intelligent search failed',
-      details: error.message
+      error: 'Error processing intelligent search',
+      message: error.message
     });
   }
 });
