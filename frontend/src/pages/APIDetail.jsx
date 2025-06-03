@@ -61,6 +61,18 @@ const APIDetail = () => {
     queryFn: () => apiService.getAPI(id),
     onSuccess: (data) => {
       const api = data.data.api;
+      
+      console.log('🔧 [API DETAIL] Loading API data:', {
+        apiId: id,
+        apiName: api.name,
+        currentVersion: api.currentVersion,
+        currentVersionSpec: !!api.currentVersionSpec,
+        specKeys: api.currentVersionSpec ? Object.keys(api.currentVersionSpec) : null,
+        versions: api.versions?.length || 0,
+        hasVersions: !!api.versions,
+        firstVersionSpec: api.versions?.[0]?.openApiSpec ? !!api.versions[0].openApiSpec : null
+      });
+      
       setEditForm({
         name: api.name,
         description: api.description || '',
@@ -413,9 +425,107 @@ const APIDetail = () => {
             <Typography variant="h6" gutterBottom>
               Configuración de la API
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Configuración avanzada y opciones de la API próximamente...
-            </Typography>
+            
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Configuración General
+                    </Typography>
+                    <List dense>
+                      <ListItem>
+                        <ListItemText 
+                          primary="URL Base"
+                          secondary={api.currentVersionSpec?.servers?.[0]?.url || 'No configurada'}
+                        />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemText 
+                          primary="Versión de OpenAPI"
+                          secondary={api.currentVersionSpec?.openapi || '3.0.0'}
+                        />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemText 
+                          primary="Formato de Respuesta"
+                          secondary="application/json"
+                        />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemText 
+                          primary="Autenticación"
+                          secondary={api.currentVersionSpec?.components?.securitySchemes ? 'Configurada' : 'No configurada'}
+                        />
+                      </ListItem>
+                    </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Endpoints Disponibles
+                    </Typography>
+                    {api.currentVersionSpec?.paths ? (
+                      <List dense>
+                        {Object.keys(api.currentVersionSpec.paths).slice(0, 5).map((path, index) => (
+                          <ListItem key={index}>
+                            <ListItemText 
+                              primary={path}
+                              secondary={Object.keys(api.currentVersionSpec.paths[path]).join(', ').toUpperCase()}
+                            />
+                          </ListItem>
+                        ))}
+                        {Object.keys(api.currentVersionSpec.paths).length > 5 && (
+                          <ListItem>
+                            <ListItemText 
+                              primary={`+${Object.keys(api.currentVersionSpec.paths).length - 5} más...`}
+                              secondary="Ver pestaña OpenAPI Spec para detalles completos"
+                            />
+                          </ListItem>
+                        )}
+                      </List>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        No hay endpoints configurados
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Historial de Versiones
+                    </Typography>
+                    {api.versions && api.versions.length > 0 ? (
+                      <List>
+                        {api.versions.slice(0, 3).map((version, index) => (
+                          <ListItem key={index}>
+                            <ListItemText 
+                              primary={`Versión ${version.version}`}
+                              secondary={`Creada: ${new Date(version.createdAt).toLocaleDateString()} - ${version.changelog || 'Sin descripción de cambios'}`}
+                            />
+                            {version.version === api.currentVersion && (
+                              <Chip label="Actual" color="primary" size="small" />
+                            )}
+                          </ListItem>
+                        ))}
+                      </List>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        No hay historial de versiones disponible
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
           </CardContent>
         </Card>
       )}

@@ -69,18 +69,34 @@ const APIEditor = () => {
     queryFn: () => apiService.getAPI(id),
     onSuccess: (data) => {
       const api = data.data.api;
+      
+      console.log('🔧 [API EDITOR] Loading API data:', {
+        apiId: id,
+        apiName: api.name,
+        apiDescription: api.description,
+        apiStatus: api.status,
+        apiVisibility: api.visibility,
+        apiCategory: api.category,
+        apiTags: api.tags,
+        currentVersionSpec: !!api.currentVersionSpec
+      });
+      
       setFormData({
-        name: api.name,
+        name: api.name || '',
         description: api.description || '',
-        status: api.status,
-        visibility: api.visibility,
-        category: api.category,
+        status: api.status || 'draft',
+        visibility: api.visibility || 'private',
+        category: api.category || 'other',
         tags: api.tags || []
       });
       
       // Set OpenAPI spec
       if (api.currentVersionSpec) {
         setSpecData(JSON.stringify(api.currentVersionSpec, null, 2));
+        console.log('🔧 [API EDITOR] OpenAPI spec loaded, length:', JSON.stringify(api.currentVersionSpec, null, 2).length);
+      } else {
+        console.log('❌ [API EDITOR] No OpenAPI spec found for this API');
+        setSpecData('');
       }
     }
   });
@@ -135,7 +151,45 @@ const APIEditor = () => {
 
   // Save basic info
   const handleSaveBasicInfo = () => {
-    updateAPIMutation.mutate(formData);
+    console.log('🔧 [API EDITOR] Attempting to save basic info:', formData);
+    
+    // Validate required fields
+    if (!formData.name || formData.name.trim().length === 0) {
+      toast.error('El nombre de la API es requerido');
+      return;
+    }
+    
+    // Only send changed fields to avoid unnecessary updates
+    const updatedFields = {};
+    
+    if (formData.name !== api.name) {
+      updatedFields.name = formData.name;
+    }
+    if (formData.description !== (api.description || '')) {
+      updatedFields.description = formData.description;
+    }
+    if (formData.status !== api.status) {
+      updatedFields.status = formData.status;
+    }
+    if (formData.visibility !== api.visibility) {
+      updatedFields.visibility = formData.visibility;
+    }
+    if (formData.category !== api.category) {
+      updatedFields.category = formData.category;
+    }
+    if (JSON.stringify(formData.tags) !== JSON.stringify(api.tags || [])) {
+      updatedFields.tags = formData.tags;
+    }
+    
+    console.log('🔧 [API EDITOR] Sending update fields:', updatedFields);
+    
+    // If no changes, show message
+    if (Object.keys(updatedFields).length === 0) {
+      toast.info('No hay cambios para guardar');
+      return;
+    }
+    
+    updateAPIMutation.mutate(updatedFields);
   };
 
   // Save specification

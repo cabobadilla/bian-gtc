@@ -304,8 +304,32 @@ router.put('/:id', verifyToken, requireAPIAccess('editor'), async (req, res) => 
   try {
     const { name, description, status, visibility, tags, category } = req.body;
 
+    // Add comprehensive debug logging
+    console.log('🔧 [UPDATE API] Request received:', {
+      apiId: req.params.id,
+      body: req.body,
+      name: name,
+      nameType: typeof name,
+      nameLength: name ? name.length : 'undefined',
+      description: description,
+      status: status,
+      visibility: visibility,
+      tags: tags,
+      category: category
+    });
+
+    console.log('🔧 [UPDATE API] Current API state:', {
+      currentName: req.api.name,
+      currentDescription: req.api.description,
+      currentStatus: req.api.status,
+      currentVisibility: req.api.visibility,
+      currentTags: req.api.tags,
+      currentCategory: req.api.category
+    });
+
     // Validate input
-    if (name && name.trim().length === 0) {
+    if (name !== undefined && name.trim().length === 0) {
+      console.log('❌ [UPDATE API] Name validation failed: empty string');
       return res.status(400).json({
         success: false,
         error: 'Name cannot be empty'
@@ -313,6 +337,7 @@ router.put('/:id', verifyToken, requireAPIAccess('editor'), async (req, res) => 
     }
 
     if (status && !['draft', 'review', 'published', 'deprecated'].includes(status)) {
+      console.log('❌ [UPDATE API] Status validation failed:', status);
       return res.status(400).json({
         success: false,
         error: 'Invalid status value'
@@ -320,21 +345,58 @@ router.put('/:id', verifyToken, requireAPIAccess('editor'), async (req, res) => 
     }
 
     if (visibility && !['private', 'company', 'public'].includes(visibility)) {
+      console.log('❌ [UPDATE API] Visibility validation failed:', visibility);
       return res.status(400).json({
         success: false,
         error: 'Invalid visibility value'
       });
     }
 
-    // Update fields
-    if (name !== undefined) req.api.name = name.trim();
-    if (description !== undefined) req.api.description = description.trim();
-    if (status !== undefined) req.api.status = status;
-    if (visibility !== undefined) req.api.visibility = visibility;
-    if (tags !== undefined) req.api.tags = Array.isArray(tags) ? tags : [];
-    if (category !== undefined) req.api.category = category;
+    // Update fields only if they are provided and valid
+    console.log('🔧 [UPDATE API] Applying updates...');
+    
+    if (name !== undefined && name.trim().length > 0) {
+      console.log('🔧 [UPDATE API] Updating name:', req.api.name, '->', name.trim());
+      req.api.name = name.trim();
+    }
+    
+    if (description !== undefined) {
+      console.log('🔧 [UPDATE API] Updating description');
+      req.api.description = description.trim();
+    }
+    
+    if (status !== undefined) {
+      console.log('🔧 [UPDATE API] Updating status:', req.api.status, '->', status);
+      req.api.status = status;
+    }
+    
+    if (visibility !== undefined) {
+      console.log('🔧 [UPDATE API] Updating visibility:', req.api.visibility, '->', visibility);
+      req.api.visibility = visibility;
+    }
+    
+    if (tags !== undefined) {
+      console.log('🔧 [UPDATE API] Updating tags:', req.api.tags, '->', tags);
+      req.api.tags = Array.isArray(tags) ? tags : [];
+    }
+    
+    if (category !== undefined) {
+      console.log('🔧 [UPDATE API] Updating category:', req.api.category, '->', category);
+      req.api.category = category;
+    }
+
+    console.log('🔧 [UPDATE API] Final API state before save:', {
+      name: req.api.name,
+      description: req.api.description,
+      status: req.api.status,
+      visibility: req.api.visibility,
+      tags: req.api.tags,
+      category: req.api.category
+    });
 
     await req.api.save();
+
+    console.log('✅ [UPDATE API] Successfully saved API');
 
     // Return updated API
     const updatedAPI = await req.api.populate([
