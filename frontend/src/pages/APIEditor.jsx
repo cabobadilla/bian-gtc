@@ -266,13 +266,122 @@ const APIEditor = () => {
   };
 
   const handleSchemaDelete = (schemaName) => {
-    const updatedSchemas = { ...schemas };
-    delete updatedSchemas[schemaName];
+    console.log('🔧 [API EDITOR] Deleting schema:', schemaName);
     
-    setSchemas(updatedSchemas);
-    updateSpecWithSchemas(updatedSchemas);
-    setUnsavedChanges(true);
-    toast.success('Schema eliminado');
+    try {
+      // Parse current spec to clean up references
+      const spec = JSON.parse(specData);
+      const schemaRef = `#/components/schemas/${schemaName}`;
+      
+      console.log('🔧 [API EDITOR] Looking for references to:', schemaRef);
+      
+      // Function to recursively remove schema references from an object
+      const removeSchemaReference = (obj) => {
+        if (!obj || typeof obj !== 'object') return obj;
+        
+        if (Array.isArray(obj)) {
+          return obj.map(removeSchemaReference).filter(item => {
+            // Remove items that are just the deleted schema reference
+            return !(item && item.$ref === schemaRef);
+          });
+        }
+        
+        const newObj = {};
+        for (const [key, value] of Object.entries(obj)) {
+          if (key === '$ref' && value === schemaRef) {
+            // Skip this reference entirely
+            continue;
+          } else if (key === 'allOf' && Array.isArray(value)) {
+            // Handle allOf arrays - remove the deleted schema reference
+            const filteredAllOf = value.filter(item => !(item && item.$ref === schemaRef));
+            if (filteredAllOf.length > 0) {
+              newObj[key] = filteredAllOf.map(removeSchemaReference);
+            }
+            // If allOf becomes empty, don't include it
+          } else if (value && typeof value === 'object') {
+            const cleanedValue = removeSchemaReference(value);
+            // Only include non-empty objects
+            if (Object.keys(cleanedValue).length > 0) {
+              newObj[key] = cleanedValue;
+            }
+          } else {
+            newObj[key] = value;
+          }
+        }
+        return newObj;
+      };
+      
+      // Clean up references in all paths
+      if (spec.paths) {
+        Object.keys(spec.paths).forEach(path => {
+          Object.keys(spec.paths[path]).forEach(method => {
+            const endpoint = spec.paths[path][method];
+            if (endpoint && typeof endpoint === 'object') {
+              // Clean request body references
+              if (endpoint.requestBody) {
+                endpoint.requestBody = removeSchemaReference(endpoint.requestBody);
+                // Remove empty requestBody
+                if (Object.keys(endpoint.requestBody).length === 0) {
+                  delete endpoint.requestBody;
+                }
+              }
+              
+              // Clean response references
+              if (endpoint.responses) {
+                Object.keys(endpoint.responses).forEach(statusCode => {
+                  endpoint.responses[statusCode] = removeSchemaReference(endpoint.responses[statusCode]);
+                  // Remove empty responses
+                  if (Object.keys(endpoint.responses[statusCode]).length === 0) {
+                    delete endpoint.responses[statusCode];
+                  }
+                });
+              }
+              
+              // Clean parameters references
+              if (endpoint.parameters) {
+                endpoint.parameters = removeSchemaReference(endpoint.parameters);
+              }
+            }
+          });
+        });
+      }
+      
+      // Remove the schema from components.schemas
+      const updatedSchemas = { ...schemas };
+      delete updatedSchemas[schemaName];
+      
+      // Update spec with cleaned references and removed schema
+      if (!spec.components) spec.components = {};
+      spec.components.schemas = updatedSchemas;
+      
+      // Update state
+      setSchemas(updatedSchemas);
+      const updatedSpecData = JSON.stringify(spec, null, 2);
+      setSpecData(updatedSpecData);
+      setUnsavedChanges(true);
+      
+      console.log('🔧 [API EDITOR] Schema and references cleaned successfully');
+      
+      // Auto-save the cleaned spec
+      updateSpecMutation.mutate({
+        spec,
+        changelog: `Schema "${schemaName}" eliminado y referencias limpiadas`
+      });
+      
+      toast.success(`Schema "${schemaName}" eliminado y referencias limpiadas`);
+      
+    } catch (error) {
+      console.error('❌ [API EDITOR] Error deleting schema and cleaning references:', error);
+      
+      // Fallback: just remove from schemas object
+      const updatedSchemas = { ...schemas };
+      delete updatedSchemas[schemaName];
+      
+      setSchemas(updatedSchemas);
+      updateSpecWithSchemas(updatedSchemas);
+      setUnsavedChanges(true);
+      toast.success('Schema eliminado (referencias pueden necesitar limpieza manual)');
+    }
   };
 
   const updateSpecWithSchemas = (updatedSchemas) => {
