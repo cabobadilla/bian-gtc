@@ -95,6 +95,64 @@ router.get('/search', verifyToken, async (req, res) => {
 
 /**
  * @swagger
+ * /api/bian/domains:
+ *   get:
+ *     summary: Get BIAN service domains
+ *     tags: [BIAN Reference]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of service domains with counts
+ */
+router.get('/domains', verifyToken, async (req, res) => {
+  try {
+    const result = await bianReferenceService.getServiceDomains();
+    res.json(result);
+  } catch (error) {
+    console.error('Get service domains error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get service domains'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/bian/popular:
+ *   get:
+ *     summary: Get popular BIAN reference APIs
+ *     tags: [BIAN Reference]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Maximum number of results
+ *     responses:
+ *       200:
+ *         description: List of popular BIAN APIs
+ */
+router.get('/popular', verifyToken, async (req, res) => {
+  try {
+    const { limit } = req.query;
+    const result = await bianReferenceService.getPopularAPIs(parseInt(limit) || 10);
+    res.json(result);
+  } catch (error) {
+    console.error('Get popular APIs error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get popular APIs'
+    });
+  }
+});
+
+/**
+ * @swagger
  * /api/bian/{id}:
  *   get:
  *     summary: Get BIAN reference API details
@@ -209,64 +267,6 @@ router.post('/:id/explain', verifyToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to generate explanation'
-    });
-  }
-});
-
-/**
- * @swagger
- * /api/bian/domains:
- *   get:
- *     summary: Get BIAN service domains
- *     tags: [BIAN Reference]
- *     security:
- *       - BearerAuth: []
- *     responses:
- *       200:
- *         description: List of service domains with counts
- */
-router.get('/domains', verifyToken, async (req, res) => {
-  try {
-    const result = await bianReferenceService.getServiceDomains();
-    res.json(result);
-  } catch (error) {
-    console.error('Get service domains error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get service domains'
-    });
-  }
-});
-
-/**
- * @swagger
- * /api/bian/popular:
- *   get:
- *     summary: Get popular BIAN reference APIs
- *     tags: [BIAN Reference]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 10
- *         description: Maximum number of results
- *     responses:
- *       200:
- *         description: List of popular BIAN APIs
- */
-router.get('/popular', verifyToken, async (req, res) => {
-  try {
-    const { limit } = req.query;
-    const result = await bianReferenceService.getPopularAPIs(parseInt(limit) || 10);
-    res.json(result);
-  } catch (error) {
-    console.error('Get popular APIs error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get popular APIs'
     });
   }
 });

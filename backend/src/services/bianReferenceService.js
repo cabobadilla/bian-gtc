@@ -1,6 +1,8 @@
 const BIANReferenceAPI = require('../models/BIANReferenceAPI');
 const openaiService = require('./openaiService');
 
+const isDebug = process.env.DEBUG === 'ON';
+
 class BIANReferenceService {
   
   /**
@@ -15,6 +17,13 @@ class BIANReferenceService {
         sort = 'popularity',
         language = 'en'
       } = options;
+
+      if (isDebug) {
+        console.log('🔍 [BIAN SEARCH] Starting search:', {
+          searchQuery,
+          options
+        });
+      }
 
       let results;
 
@@ -37,6 +46,30 @@ class BIANReferenceService {
           .limit(limit);
       }
 
+      if (isDebug) {
+        console.log('📊 [BIAN SEARCH] Database results:', {
+          count: results.length,
+          hasResults: results.length > 0
+        });
+      }
+
+      // If no results from database, use ChatGPT to generate BIAN-compliant suggestions
+      if (results.length === 0 && searchQuery) {
+        if (isDebug) {
+          console.log('🤖 [BIAN SEARCH] No DB results, using ChatGPT...');
+        }
+        
+        const aiResults = await this.generateBIANSuggestions(searchQuery, language);
+        if (aiResults.success) {
+          return {
+            success: true,
+            results: aiResults.suggestions,
+            count: aiResults.suggestions.length,
+            source: 'ai-generated'
+          };
+        }
+      }
+
       // Enrich results with localized descriptions
       const enrichedResults = results.map(api => ({
         ...api.toObject(),
@@ -46,7 +79,8 @@ class BIANReferenceService {
       return {
         success: true,
         results: enrichedResults,
-        count: enrichedResults.length
+        count: enrichedResults.length,
+        source: 'database'
       };
 
     } catch (error) {
@@ -54,6 +88,102 @@ class BIANReferenceService {
       return {
         success: false,
         error: 'Failed to search BIAN reference APIs',
+        details: error.message
+      };
+    }
+  }
+
+  /**
+   * Generate BIAN API suggestions using ChatGPT
+   */
+  async generateBIANSuggestions(searchQuery, language = 'en') {
+    try {
+      if (isDebug) {
+        console.log('🤖 [AI SUGGESTIONS] Generating for query:', searchQuery);
+      }
+
+      const systemPrompt = language === 'es' 
+        ? `Eres un experto en estándares BIAN (Banking Industry Architecture Network). Genera sugerencias de APIs BIAN basadas en la consulta del usuario.
+
+Para cada API sugerida, proporciona:
+1. Nombre descriptivo de la API
+2. Dominio de servicio BIAN apropiado
+3. Descripción clara de la funcionalidad
+4. Operaciones principales (métodos HTTP)
+5. Nivel de complejidad (low/medium/high)
+
+Responde en formato JSON con un array de APIs sugeridas. Máximo 6 sugerencias.`
+        : `You are an expert in BIAN (Banking Industry Architecture Network) standards. Generate BIAN API suggestions based on the user's search query.
+
+For each suggested API, provide:
+1. Descriptive API name
+2. Appropriate BIAN service domain
+3. Clear functionality description
+4. Main operations (HTTP methods)
+5. Complexity level (low/medium/high)
+
+Respond in JSON format with an array of suggested APIs. Maximum 6 suggestions.`;
+
+      const userPrompt = `Generate BIAN API suggestions for: "${searchQuery}"
+
+Return JSON format:
+{
+  "suggestions": [
+    {
+      "_id": "ai-generated-1",
+      "name": "API Name",
+      "serviceDomain": "Service Domain",
+      "description": "Description",
+      "complexity": "low|medium|high",
+      "serviceOperations": [
+        {
+          "name": "Operation Name",
+          "method": "GET|POST|PUT|DELETE",
+          "description": "Operation description"
+        }
+      ],
+      "tags": ["tag1", "tag2"],
+      "popularity": 0
+    }
+  ]
+}`;
+
+      const completion = await openaiService.openai.chat.completions.create({
+        model: "gpt-4-1106-preview",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 2000
+      });
+
+      const responseText = completion.choices[0].message.content;
+      
+      if (isDebug) {
+        console.log('🤖 [AI SUGGESTIONS] Raw response:', responseText);
+      }
+
+      // Parse JSON response
+      const parsedResponse = JSON.parse(responseText);
+      
+      if (isDebug) {
+        console.log('✅ [AI SUGGESTIONS] Generated suggestions:', {
+          count: parsedResponse.suggestions?.length || 0
+        });
+      }
+
+      return {
+        success: true,
+        suggestions: parsedResponse.suggestions || [],
+        usage: completion.usage
+      };
+
+    } catch (error) {
+      console.error('AI suggestions error:', error);
+      return {
+        success: false,
+        error: 'Failed to generate AI suggestions',
         details: error.message
       };
     }
@@ -169,6 +299,10 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
    */
   async getServiceDomains() {
     try {
+      if (isDebug) {
+        console.log('🏢 [SERVICE DOMAINS] Getting domains...');
+      }
+
       const domains = await BIANReferenceAPI.aggregate([
         { $match: { isActive: true } },
         { 
@@ -184,13 +318,43 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
         { $sort: { count: -1 } }
       ]);
 
+      if (isDebug) {
+        console.log('📊 [SERVICE DOMAINS] Database domains:', {
+          count: domains.length
+        });
+      }
+
+      // If no domains in database, return standard BIAN domains
+      if (domains.length === 0) {
+        if (isDebug) {
+          console.log('🏢 [SERVICE DOMAINS] No DB domains, using standard BIAN domains');
+        }
+
+        const standardDomains = [
+          { name: 'Customer Management', count: 0, complexity: 'medium' },
+          { name: 'Account Management', count: 0, complexity: 'medium' },
+          { name: 'Payment Processing', count: 0, complexity: 'high' },
+          { name: 'Credit Management', count: 0, complexity: 'high' },
+          { name: 'Risk Assessment', count: 0, complexity: 'high' },
+          { name: 'Compliance', count: 0, complexity: 'medium' },
+          { name: 'Analytics', count: 0, complexity: 'low' }
+        ];
+
+        return {
+          success: true,
+          domains: standardDomains,
+          source: 'standard'
+        };
+      }
+
       return {
         success: true,
         domains: domains.map(d => ({
           name: d._id,
           count: d.count,
           complexity: d.avgComplexity < 1.5 ? 'low' : d.avgComplexity < 2.5 ? 'medium' : 'high'
-        }))
+        })),
+        source: 'database'
       };
 
     } catch (error) {
@@ -207,11 +371,64 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
    */
   async getPopularAPIs(limit = 10) {
     try {
+      if (isDebug) {
+        console.log('🔥 [POPULAR APIS] Getting popular APIs...');
+      }
+
       const popularAPIs = await BIANReferenceAPI.getPopular(limit);
+
+      if (isDebug) {
+        console.log('📊 [POPULAR APIS] Database results:', {
+          count: popularAPIs.length
+        });
+      }
+
+      // If no popular APIs in database, generate some examples
+      if (popularAPIs.length === 0) {
+        if (isDebug) {
+          console.log('🔥 [POPULAR APIS] No DB results, using examples');
+        }
+
+        const exampleAPIs = [
+          {
+            _id: 'example-1',
+            name: 'Customer Information Management',
+            serviceDomain: 'Customer Management',
+            description: 'Manage comprehensive customer information and profiles',
+            complexity: 'medium',
+            serviceOperations: [
+              { name: 'Retrieve Customer', method: 'GET', description: 'Get customer details' },
+              { name: 'Update Customer', method: 'PUT', description: 'Update customer information' }
+            ],
+            tags: ['customer', 'profile', 'management'],
+            popularity: 0
+          },
+          {
+            _id: 'example-2',
+            name: 'Payment Order Processing',
+            serviceDomain: 'Payment Processing',
+            description: 'Process and manage payment orders and transactions',
+            complexity: 'high',
+            serviceOperations: [
+              { name: 'Initiate Payment', method: 'POST', description: 'Start payment process' },
+              { name: 'Check Status', method: 'GET', description: 'Check payment status' }
+            ],
+            tags: ['payment', 'transaction', 'processing'],
+            popularity: 0
+          }
+        ];
+
+        return {
+          success: true,
+          apis: exampleAPIs,
+          source: 'examples'
+        };
+      }
 
       return {
         success: true,
-        apis: popularAPIs
+        apis: popularAPIs,
+        source: 'database'
       };
 
     } catch (error) {
