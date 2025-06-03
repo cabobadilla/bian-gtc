@@ -75,6 +75,17 @@ const APIEditor = () => {
   // Name editing state
   const [isEditingName, setIsEditingName] = useState(false);
 
+  // Schema integration state
+  const [integrationDialogOpen, setIntegrationDialogOpen] = useState(false);
+  const [selectedSchemaForIntegration, setSelectedSchemaForIntegration] = useState(null);
+  const [availablePaths, setAvailablePaths] = useState([]);
+  const [integrationSettings, setIntegrationSettings] = useState({
+    path: '',
+    method: '',
+    usage: 'response', // 'request' or 'response'
+    statusCode: '200'
+  });
+
   // Get API details
   const { data: apiData, isLoading, error } = useQuery({
     queryKey: ['api-detail', id],
@@ -168,6 +179,24 @@ const APIEditor = () => {
         if (spec.components && spec.components.schemas) {
           setSchemas(spec.components.schemas);
           console.log('🔧 [API EDITOR] Schemas extracted:', Object.keys(spec.components.schemas));
+        }
+        
+        // Extract available paths for schema integration
+        if (spec.paths) {
+          const paths = [];
+          Object.keys(spec.paths).forEach(path => {
+            Object.keys(spec.paths[path]).forEach(method => {
+              if (['get', 'post', 'put', 'patch', 'delete'].includes(method.toLowerCase())) {
+                paths.push({
+                  path,
+                  method: method.toUpperCase(),
+                  summary: spec.paths[path][method].summary || `${method.toUpperCase()} ${path}`
+                });
+              }
+            });
+          });
+          setAvailablePaths(paths);
+          console.log('🔧 [API EDITOR] Available paths extracted:', paths.length);
         }
       } catch (error) {
         console.error('Error parsing spec for schemas:', error);
@@ -270,6 +299,89 @@ const APIEditor = () => {
       
     } catch (error) {
       console.error('❌ [API EDITOR] Error updating spec with schemas:', error);
+    }
+  };
+
+  // Schema integration functions
+  const handleSchemaIntegration = (schemaName) => {
+    setSelectedSchemaForIntegration(schemaName);
+    setIntegrationSettings({
+      path: '',
+      method: '',
+      usage: 'response',
+      statusCode: '200'
+    });
+    setIntegrationDialogOpen(true);
+  };
+
+  const handleIntegrateSchema = () => {
+    const { path, method, usage, statusCode } = integrationSettings;
+    
+    if (!path || !method) {
+      toast.error('Por favor selecciona un endpoint');
+      return;
+    }
+
+    console.log('🔧 [API EDITOR] Integrating schema:', {
+      schema: selectedSchemaForIntegration,
+      path,
+      method,
+      usage,
+      statusCode
+    });
+
+    try {
+      const spec = JSON.parse(specData);
+      
+      if (!spec.paths || !spec.paths[path] || !spec.paths[path][method.toLowerCase()]) {
+        toast.error('Endpoint no encontrado en la especificación');
+        return;
+      }
+
+      const endpoint = spec.paths[path][method.toLowerCase()];
+      
+      if (usage === 'request') {
+        // Add schema to request body
+        endpoint.requestBody = {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                '$ref': `#/components/schemas/${selectedSchemaForIntegration}`
+              }
+            }
+          }
+        };
+      } else {
+        // Add schema to response
+        if (!endpoint.responses) endpoint.responses = {};
+        endpoint.responses[statusCode] = {
+          description: statusCode === '200' ? 'Successful response' : 'Response',
+          content: {
+            'application/json': {
+              schema: {
+                '$ref': `#/components/schemas/${selectedSchemaForIntegration}`
+              }
+            }
+          }
+        };
+      }
+
+      const updatedSpecData = JSON.stringify(spec, null, 2);
+      setSpecData(updatedSpecData);
+      
+      // Auto-save the updated spec
+      updateSpecMutation.mutate({
+        spec,
+        changelog: `Schema ${selectedSchemaForIntegration} integrado en ${method} ${path}`
+      });
+
+      setIntegrationDialogOpen(false);
+      toast.success(`Schema integrado en ${method} ${path}`);
+      
+    } catch (error) {
+      console.error('❌ [API EDITOR] Error integrating schema:', error);
+      toast.error('Error integrando el schema');
     }
   };
 
@@ -738,6 +850,15 @@ const APIEditor = () => {
                               </Button>
                               <Button
                                 size="small"
+                                variant="contained"
+                                color="success"
+                                onClick={() => handleSchemaIntegration(schemaName)}
+                                disabled={availablePaths.length === 0}
+                              >
+                                Integrar en API
+                              </Button>
+                              <Button
+                                size="small"
                                 color="error"
                                 onClick={() => handleSchemaDelete(schemaName)}
                               >
@@ -940,6 +1061,116 @@ const APIEditor = () => {
           </Button>
           <Button onClick={handleSchemaSave} variant="contained">
             Guardar Schema
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Schema Integration Dialog */}
+      <Dialog 
+        open={integrationDialogOpen} 
+        onClose={() => setIntegrationDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Integrar Schema: {selectedSchemaForIntegration}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Selecciona el endpoint donde quieres usar este schema y especifica 
+            si será para request body o response.
+          </Typography>
+          
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Endpoint</InputLabel>
+                <Select
+                  value={`${integrationSettings.path}|${integrationSettings.method}`}
+                  onChange={(e) => {
+                    const [path, method] = e.target.value.split('|');
+                    setIntegrationSettings(prev => ({ ...prev, path, method }));
+                  }}
+                  label="Endpoint"
+                >
+                  {availablePaths.map((pathInfo, index) => (
+                    <MenuItem 
+                      key={index} 
+                      value={`${pathInfo.path}|${pathInfo.method}`}
+                    >
+                      <Box>
+                        <Typography variant="body2" component="span">
+                          <strong>{pathInfo.method}</strong> {pathInfo.path}
+                        </Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          {pathInfo.summary}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Uso del Schema</InputLabel>
+                <Select
+                  value={integrationSettings.usage}
+                  onChange={(e) => setIntegrationSettings(prev => ({ 
+                    ...prev, 
+                    usage: e.target.value 
+                  }))}
+                  label="Uso del Schema"
+                >
+                  <MenuItem value="request">Request Body (datos de entrada)</MenuItem>
+                  <MenuItem value="response">Response (datos de salida)</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            {integrationSettings.usage === 'response' && (
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Código de Respuesta</InputLabel>
+                  <Select
+                    value={integrationSettings.statusCode}
+                    onChange={(e) => setIntegrationSettings(prev => ({ 
+                      ...prev, 
+                      statusCode: e.target.value 
+                    }))}
+                    label="Código de Respuesta"
+                  >
+                    <MenuItem value="200">200 - OK</MenuItem>
+                    <MenuItem value="201">201 - Created</MenuItem>
+                    <MenuItem value="400">400 - Bad Request</MenuItem>
+                    <MenuItem value="404">404 - Not Found</MenuItem>
+                    <MenuItem value="500">500 - Server Error</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
+            
+            <Grid item xs={12}>
+              <Alert severity="info">
+                {integrationSettings.usage === 'request' 
+                  ? `El schema ${selectedSchemaForIntegration} se usará para validar los datos que envían los clientes en las peticiones.`
+                  : `El schema ${selectedSchemaForIntegration} definirá la estructura de los datos que devuelve tu API.`
+                }
+              </Alert>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIntegrationDialogOpen(false)}>
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleIntegrateSchema} 
+            variant="contained"
+            disabled={!integrationSettings.path || !integrationSettings.method}
+          >
+            Integrar Schema
           </Button>
         </DialogActions>
       </Dialog>
