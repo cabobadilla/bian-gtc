@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const connectDB = require('./config/database');
@@ -184,23 +185,61 @@ app.use('/api/bian', bianReferenceRoutes);
 
 // Serve static files from the frontend build in production
 if (process.env.NODE_ENV === 'production') {
+  // Path from backend/src/app.js to frontend/dist
   const frontendBuildPath = path.join(__dirname, '../../frontend/dist');
   
-  // Serve static files
-  app.use(express.static(frontendBuildPath));
+  console.log('🏗️ [STATIC FILES] Attempting to serve frontend from:', frontendBuildPath);
   
-  // Handle React Router - send all non-API requests to index.html
-  app.get('*', (req, res) => {
-    // Don't serve index.html for API routes
-    if (req.path.startsWith('/api/')) {
-      return res.status(404).json({
-        error: 'API route not found',
-        path: req.originalUrl
-      });
-    }
+  // Check if the frontend build directory exists
+  if (fs.existsSync(frontendBuildPath)) {
+    console.log('✅ [STATIC FILES] Frontend build directory found');
     
-    res.sendFile(path.join(frontendBuildPath, 'index.html'));
-  });
+    // Serve static files
+    app.use(express.static(frontendBuildPath));
+    
+    // Handle React Router - send all non-API requests to index.html
+    app.get('*', (req, res) => {
+      // Don't serve index.html for API routes
+      if (req.path.startsWith('/api/')) {
+        return res.status(404).json({
+          error: 'API route not found',
+          path: req.originalUrl
+        });
+      }
+      
+      console.log(`📄 [STATIC FILES] Serving index.html for: ${req.path}`);
+      res.sendFile(path.join(frontendBuildPath, 'index.html'));
+    });
+  } else {
+    console.log('❌ [STATIC FILES] Frontend build directory not found at:', frontendBuildPath);
+    console.log('📁 [STATIC FILES] Current working directory:', process.cwd());
+    console.log('📁 [STATIC FILES] __dirname:', __dirname);
+    
+    // Try alternative paths
+    const alternativePaths = [
+      path.join(process.cwd(), 'frontend/dist'),
+      path.join(__dirname, '../../../frontend/dist'),
+      path.join(__dirname, '../../../../frontend/dist')
+    ];
+    
+    for (const altPath of alternativePaths) {
+      console.log(`🔍 [STATIC FILES] Checking alternative path: ${altPath}`);
+      if (fs.existsSync(altPath)) {
+        console.log(`✅ [STATIC FILES] Found frontend at alternative path: ${altPath}`);
+        app.use(express.static(altPath));
+        app.get('*', (req, res) => {
+          if (req.path.startsWith('/api/')) {
+            return res.status(404).json({
+              error: 'API route not found',
+              path: req.originalUrl
+            });
+          }
+          res.sendFile(path.join(altPath, 'index.html'));
+        });
+        break;
+      }
+    }
+  }
 } else {
   // 404 handler for development (API only)
   app.use('*', (req, res) => {

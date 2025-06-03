@@ -7,12 +7,22 @@ services:
     plan: free
     buildCommand: |
       echo "🏗️ Building unified service..."
+      echo "📁 Current directory: $(pwd)"
+      echo "📁 Directory contents: $(ls -la)"
+      
       echo "📁 Installing backend dependencies..."
       cd backend && npm install
+      
       echo "📁 Installing frontend dependencies..."
       cd ../frontend && npm install && npm audit fix --force
+      
       echo "🔨 Building frontend..."
       npm run build
+      
+      echo "✅ Checking build output..."
+      echo "📁 Frontend directory contents: $(ls -la)"
+      echo "📁 Dist directory contents: $(ls -la dist/ 2>/dev/null || echo 'dist directory not found')"
+      
       echo "✅ Build completed!"
     startCommand: cd backend && npm start
     healthCheckPath: /api/health

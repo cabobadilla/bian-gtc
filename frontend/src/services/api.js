@@ -8,22 +8,17 @@ const getAPIUrl = () => {
     return import.meta.env.VITE_API_URL
   }
   
-  // In production, check if we're on the unified domain or separate services
+  // In production, prioritize unified service
   if (import.meta.env.PROD) {
     const currentHost = window.location.hostname
     
-    // If we're on bian-gtc.onrender.com (unified service), backend is same origin
-    if (currentHost.includes('bian-gtc')) {
-      return `${window.location.origin}/api`
-    }
-    
-    // If we're on bian-api-frontend.onrender.com (separate services), use backend URL
+    // If we're on bian-api-frontend.onrender.com (separate frontend service), use backend URL
     if (currentHost.includes('bian-api-frontend')) {
       return 'https://bian-api-backend.onrender.com'
     }
     
-    // Default production backend
-    return 'https://bian-api-backend.onrender.com'
+    // For any other production domain (including bian-gtc.onrender.com), use same origin
+    return `${window.location.origin}/api`
   }
   
   // Development fallback
