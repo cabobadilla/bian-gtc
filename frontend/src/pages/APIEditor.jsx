@@ -33,7 +33,8 @@ import {
   Description as DescriptionIcon,
   Visibility as VisibilityIcon,
   Add as AddIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { apiService } from '../services/api';
@@ -70,6 +71,9 @@ const APIEditor = () => {
   const [schemaDialogOpen, setSchemaDialogOpen] = useState(false);
   const [newSchemaName, setNewSchemaName] = useState('');
   const [editingSchema, setEditingSchema] = useState(null);
+
+  // Name editing state
+  const [isEditingName, setIsEditingName] = useState(false);
 
   // Get API details
   const { data: apiData, isLoading, error } = useQuery({
@@ -203,7 +207,7 @@ const APIEditor = () => {
       setSchemas(updatedSchemas);
       updateSpecWithSchemas(updatedSchemas);
       setNewSchemaName('');
-      setUnsavedChanges(true);
+      toast.success(`Schema "${newSchemaName}" creado y guardado`);
     }
   };
 
@@ -225,8 +229,7 @@ const APIEditor = () => {
       setSchemas(updatedSchemas);
       updateSpecWithSchemas(updatedSchemas);
       setSchemaDialogOpen(false);
-      setUnsavedChanges(true);
-      toast.success('Schema actualizado');
+      toast.success('Schema guardado automáticamente');
     } catch (error) {
       console.error('❌ [API EDITOR] Schema JSON parse error:', error);
       toast.error('JSON inválido en el schema');
@@ -257,6 +260,14 @@ const APIEditor = () => {
       console.log('🔧 [API EDITOR] Schemas in updated spec:', Object.keys(spec.components.schemas));
       
       setSpecData(updatedSpecData);
+      
+      // Auto-save the spec to backend when schemas are modified
+      console.log('🔧 [API EDITOR] Auto-saving spec with schemas to backend');
+      updateSpecMutation.mutate({
+        spec,
+        changelog: 'Schemas actualizados automáticamente'
+      });
+      
     } catch (error) {
       console.error('❌ [API EDITOR] Error updating spec with schemas:', error);
     }
@@ -312,20 +323,23 @@ const APIEditor = () => {
   const handleSaveBasicInfo = () => {
     console.log('🔧 [API EDITOR] Attempting to save basic info:', formData);
     console.log('🔧 [API EDITOR] Current API data:', api);
+    console.log('🔧 [API EDITOR] Is editing name:', isEditingName);
     
-    // Validate required fields
-    if (!formData.name || formData.name.trim().length === 0) {
+    // Only validate name if we're editing it
+    if (isEditingName && (!formData.name || formData.name.trim().length === 0)) {
       toast.error('El nombre de la API es requerido');
       return;
     }
     
-    // Always include required fields (like name) and any changed fields
-    const updatedFields = {
-      name: formData.name, // Always include name as it's required by backend
-    };
+    // Build update object with only the fields that should be updated
+    const updatedFields = {};
     
-    // Include other fields regardless of whether they changed
-    // This ensures we send all form data to maintain consistency
+    // Only include name if we're editing it
+    if (isEditingName && formData.name) {
+      updatedFields.name = formData.name;
+    }
+    
+    // Always include other fields that might have changed
     if (formData.description !== undefined) {
       updatedFields.description = formData.description;
     }
@@ -344,7 +358,11 @@ const APIEditor = () => {
     
     console.log('🔧 [API EDITOR] Sending update fields:', updatedFields);
     
-    updateAPIMutation.mutate(updatedFields);
+    updateAPIMutation.mutate(updatedFields, {
+      onSuccess: () => {
+        setIsEditingName(false); // Close name editing after successful save
+      }
+    });
   };
 
   // Save specification
@@ -471,13 +489,42 @@ const APIEditor = () => {
             
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Nombre de la API"
-                  value={formData.name}
-                  onChange={(e) => handleFormChange('name', e.target.value)}
-                  required
-                />
+                {!isEditingName ? (
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Nombre de la API
+                      </Typography>
+                      <Typography variant="h6">
+                        {api.name}
+                      </Typography>
+                    </Box>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<EditIcon />}
+                      onClick={() => setIsEditingName(true)}
+                    >
+                      Editar
+                    </Button>
+                  </Box>
+                ) : (
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <TextField
+                      fullWidth
+                      label="Nombre de la API"
+                      value={formData.name}
+                      onChange={(e) => handleFormChange('name', e.target.value)}
+                      required
+                    />
+                    <Button
+                      size="small"
+                      onClick={() => setIsEditingName(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </Box>
+                )}
               </Grid>
               
               <Grid item xs={12} md={6}>
@@ -671,72 +718,133 @@ const APIEditor = () => {
             
             {/* Schemas list */}
             {Object.keys(schemas).length > 0 ? (
-              <Grid container spacing={2}>
-                {Object.entries(schemas).map(([schemaName, schema]) => (
-                  <Grid item xs={12} md={6} key={schemaName}>
-                    <Card variant="outlined">
-                      <CardContent>
-                        <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
-                          <Typography variant="h6" color="primary">
-                            {schemaName}
-                          </Typography>
-                          <Box display="flex" gap={1}>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => handleSchemaEdit(schemaName)}
-                            >
-                              Editar
-                            </Button>
-                            <Button
-                              size="small"
-                              color="error"
-                              onClick={() => handleSchemaDelete(schemaName)}
-                            >
-                              Eliminar
-                            </Button>
-                          </Box>
-                        </Box>
-                        
-                        <Typography variant="body2" color="text.secondary" gutterBottom>
-                          Tipo: {schema.type || 'object'}
-                        </Typography>
-                        
-                        {schema.description && (
-                          <Typography variant="body2" sx={{ mb: 2 }}>
-                            {schema.description}
-                          </Typography>
-                        )}
-                        
-                        {schema.properties && (
-                          <Box>
-                            <Typography variant="subtitle2" gutterBottom>
-                              Propiedades ({Object.keys(schema.properties).length}):
+              <>
+                <Grid container spacing={2}>
+                  {Object.entries(schemas).map(([schemaName, schema]) => (
+                    <Grid item xs={12} md={6} key={schemaName}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
+                            <Typography variant="h6" color="primary">
+                              {schemaName}
                             </Typography>
-                            <Box display="flex" gap={1} flexWrap="wrap">
-                              {Object.keys(schema.properties).slice(0, 5).map((prop) => (
-                                <Chip
-                                  key={prop}
-                                  label={prop}
-                                  size="small"
-                                  variant="outlined"
-                                />
-                              ))}
-                              {Object.keys(schema.properties).length > 5 && (
-                                <Chip
-                                  label={`+${Object.keys(schema.properties).length - 5} más`}
-                                  size="small"
-                                  color="primary"
-                                />
-                              )}
+                            <Box display="flex" gap={1}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleSchemaEdit(schemaName)}
+                              >
+                                Editar
+                              </Button>
+                              <Button
+                                size="small"
+                                color="error"
+                                onClick={() => handleSchemaDelete(schemaName)}
+                              >
+                                Eliminar
+                              </Button>
                             </Box>
                           </Box>
-                        )}
-                      </CardContent>
-                    </Card>
+                          
+                          <Typography variant="body2" color="text.secondary" gutterBottom>
+                            Tipo: {schema.type || 'object'}
+                          </Typography>
+                          
+                          {schema.description && (
+                            <Typography variant="body2" sx={{ mb: 2 }}>
+                              {schema.description}
+                            </Typography>
+                          )}
+                          
+                          {schema.properties && (
+                            <Box>
+                              <Typography variant="subtitle2" gutterBottom>
+                                Propiedades ({Object.keys(schema.properties).length}):
+                              </Typography>
+                              <Box display="flex" gap={1} flexWrap="wrap">
+                                {Object.keys(schema.properties).slice(0, 5).map((prop) => (
+                                  <Chip
+                                    key={prop}
+                                    label={prop}
+                                    size="small"
+                                    variant="outlined"
+                                  />
+                                ))}
+                                {Object.keys(schema.properties).length > 5 && (
+                                  <Chip
+                                    label={`+${Object.keys(schema.properties).length - 5} más`}
+                                    size="small"
+                                    color="primary"
+                                  />
+                                )}
+                              </Box>
+                            </Box>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+                
+                {/* Schema Usage Guide */}
+                <Box mt={4}>
+                  <Typography variant="h6" gutterBottom>
+                    Cómo usar estos Schemas en tu API
+                  </Typography>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    Los schemas se pueden referenciar en los endpoints de tu API para definir 
+                    la estructura de datos de requests y responses.
+                  </Alert>
+                  
+                  <Grid container spacing={2}>
+                    {Object.keys(schemas).map((schemaName) => (
+                      <Grid item xs={12} md={6} key={`usage-${schemaName}`}>
+                        <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
+                          <CardContent>
+                            <Typography variant="subtitle1" gutterBottom color="primary">
+                              Referencia para "{schemaName}"
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 1 }}>
+                              Request Body:
+                            </Typography>
+                            <Paper sx={{ p: 1, mb: 1, bgcolor: 'grey.100' }}>
+                              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                {`"requestBody": {
+  "content": {
+    "application/json": {
+      "schema": {
+        "$ref": "#/components/schemas/${schemaName}"
+      }
+    }
+  }
+}`}
+                              </Typography>
+                            </Paper>
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 1 }}>
+                              Response:
+                            </Typography>
+                            <Paper sx={{ p: 1, bgcolor: 'grey.100' }}>
+                              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                {`"responses": {
+  "200": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "$ref": "#/components/schemas/${schemaName}"
+        }
+      }
+    }
+  }
+}`}
+                              </Typography>
+                            </Paper>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    ))}
                   </Grid>
-                ))}
-              </Grid>
+                </Box>
+              </>
             ) : (
               <Alert severity="info">
                 No se encontraron schemas en la especificación OpenAPI. 
