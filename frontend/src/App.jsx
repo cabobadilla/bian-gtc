@@ -49,8 +49,9 @@ function App() {
             <Route path="companies" element={<Companies />} />
             <Route path="companies/:companyId" element={<CompanyDetail />} />
             <Route path="companies/:companyId/apis" element={<APIs />} />
-            <Route path="apis/:apiId" element={<APIDetail />} />
-            <Route path="apis/:apiId/edit" element={<APIEditor />} />
+            <Route path="apis" element={<APIs />} />
+            <Route path="apis/:id" element={<APIDetail />} />
+            <Route path="apis/:id/edit" element={<APIEditor />} />
             <Route path="profile" element={<Profile />} />
           </Route>
         ) : (

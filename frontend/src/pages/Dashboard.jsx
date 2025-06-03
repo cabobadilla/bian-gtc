@@ -22,7 +22,8 @@ import {
   Add as AddIcon,
   Search as SearchIcon,
   CheckCircle as CheckIcon,
-  RadioButtonUnchecked as UncheckedIcon
+  RadioButtonUnchecked as UncheckedIcon,
+  Code as CodeIcon
 } from '@mui/icons-material'
 import { useQuery } from 'react-query'
 import { useNavigate } from 'react-router-dom'
@@ -298,6 +299,45 @@ const Dashboard = () => {
               </Grid>
             )}
           </Grid>
+        </Box>
+      )}
+
+      {/* APIs Quick View */}
+      {hasCompanies && stats.totalAPIs > 0 && (
+        <Box mt={4}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h5">
+              Mis APIs Recientes
+            </Typography>
+            <Button 
+              variant="outlined" 
+              onClick={() => navigate('/apis')}
+              size="small"
+            >
+              Ver todas las APIs
+            </Button>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Accede rápidamente a tus APIs más recientes
+          </Typography>
+          <Card>
+            <CardContent sx={{ textAlign: 'center', py: 4 }}>
+              <CodeIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+              <Typography variant="h6" gutterBottom>
+                {stats.totalAPIs} API{stats.totalAPIs > 1 ? 's' : ''} creada{stats.totalAPIs > 1 ? 's' : ''}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Gestiona y organiza todas tus APIs BIAN
+              </Typography>
+              <Button 
+                variant="contained" 
+                onClick={() => navigate('/apis')}
+                startIcon={<CodeIcon />}
+              >
+                Ver Mis APIs
+              </Button>
+            </CardContent>
+          </Card>
         </Box>
       )}
     </Container>

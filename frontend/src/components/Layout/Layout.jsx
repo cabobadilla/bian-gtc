@@ -15,6 +15,7 @@ const Layout = () => {
     if (location.pathname === '/dashboard') return 0
     if (location.pathname === '/bian-search') return 1
     if (location.pathname.startsWith('/companies')) return 2
+    if (location.pathname.startsWith('/apis')) return 3
     return 0
   }
 
@@ -67,6 +68,12 @@ const Layout = () => {
                 label="Empresas" 
                 component={Link} 
                 to="/companies"
+                sx={{ color: 'white' }}
+              />
+              <Tab 
+                label="📋 Mis APIs" 
+                component={Link} 
+                to="/apis"
                 sx={{ color: 'white' }}
               />
             </Tabs>

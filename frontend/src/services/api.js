@@ -128,6 +128,7 @@ export const apiService = {
     api.get(`/apis/company/${companyId}`, { params }),
   getAPI: (id, version = null) => 
     api.get(`/apis/${id}`, { params: version ? { version } : {} }),
+  updateAPI: (id, data) => api.put(`/apis/${id}`, data),
   updateAPISpec: (id, data) => api.put(`/apis/${id}/spec`, data),
   enrichAPI: (id, data) => api.post(`/apis/${id}/enrich`, data),
 }
