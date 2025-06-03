@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -54,6 +54,12 @@ const APIs = () => {
   const [selectedAPI, setSelectedAPI] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+  // Debug effect for dialog state
+  useEffect(() => {
+    console.log('🔧 [FRONTEND] deleteDialogOpen state changed:', deleteDialogOpen);
+    console.log('🔧 [FRONTEND] selectedAPI when dialog state changed:', selectedAPI);
+  }, [deleteDialogOpen, selectedAPI]);
+
   // Get user's companies
   const { data: companiesData } = useQuery(
     'my-companies',
@@ -108,8 +114,15 @@ const APIs = () => {
 
   // Delete API mutation
   const deleteAPIMutation = useMutation({
-    mutationFn: (apiId) => apiService.deleteAPI(apiId),
-    onSuccess: () => {
+    mutationFn: (apiId) => {
+      console.log('🔧 [FRONTEND] deleteAPIMutation - mutationFn called with apiId:', apiId);
+      return apiService.deleteAPI(apiId);
+    },
+    onMutate: (apiId) => {
+      console.log('🔧 [FRONTEND] deleteAPIMutation - onMutate called with apiId:', apiId);
+    },
+    onSuccess: (data) => {
+      console.log('🔧 [FRONTEND] deleteAPIMutation - onSuccess called with data:', data);
       toast.success('API eliminada exitosamente');
       setDeleteDialogOpen(false);
       setSelectedAPI(null);
@@ -118,9 +131,14 @@ const APIs = () => {
       refetch();
     },
     onError: (error) => {
-      console.error('Delete API error:', error);
+      console.error('❌ [FRONTEND] deleteAPIMutation - onError called with error:', error);
+      console.error('❌ [FRONTEND] Error response:', error.response);
+      console.error('❌ [FRONTEND] Error data:', error.response?.data);
       toast.error(error.response?.data?.error || 'Error eliminando la API');
       setDeleteDialogOpen(false);
+    },
+    onSettled: (data, error) => {
+      console.log('🔧 [FRONTEND] deleteAPIMutation - onSettled called with data:', data, 'error:', error);
     }
   });
 
@@ -152,14 +170,20 @@ const APIs = () => {
   };
 
   const handleDeleteAPI = (api) => {
+    console.log('🔧 [FRONTEND] handleDeleteAPI called with:', api);
     setSelectedAPI(api);
     setDeleteDialogOpen(true);
     handleMenuClose();
   };
 
   const confirmDeleteAPI = () => {
+    console.log('🔧 [FRONTEND] confirmDeleteAPI called');
+    console.log('🔧 [FRONTEND] selectedAPI:', selectedAPI);
     if (selectedAPI) {
+      console.log('🔧 [FRONTEND] Attempting to delete API:', selectedAPI._id);
       deleteAPIMutation.mutate(selectedAPI._id);
+    } else {
+      console.error('❌ [FRONTEND] No selected API to delete');
     }
   };
 
@@ -398,15 +422,24 @@ const APIs = () => {
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
       >
-        <MenuItem onClick={() => handleViewAPI(selectedAPI)}>
+        <MenuItem onClick={() => {
+          console.log('🔧 [FRONTEND] Ver detalles clicked for API:', selectedAPI?._id);
+          handleViewAPI(selectedAPI);
+        }}>
           <VisibilityIcon sx={{ mr: 1 }} />
           Ver detalles
         </MenuItem>
-        <MenuItem onClick={() => handleEditAPI(selectedAPI)}>
+        <MenuItem onClick={() => {
+          console.log('🔧 [FRONTEND] Editar clicked for API:', selectedAPI?._id);
+          handleEditAPI(selectedAPI);
+        }}>
           <EditIcon sx={{ mr: 1 }} />
           Editar
         </MenuItem>
-        <MenuItem onClick={() => handleDeleteAPI(selectedAPI)}>
+        <MenuItem onClick={() => {
+          console.log('🔧 [FRONTEND] Eliminar menu item clicked for API:', selectedAPI?._id);
+          handleDeleteAPI(selectedAPI);
+        }}>
           <DeleteIcon sx={{ mr: 1 }} />
           Eliminar
         </MenuItem>
@@ -415,7 +448,10 @@ const APIs = () => {
       {/* Delete Dialog */}
       <Dialog
         open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
+        onClose={() => {
+          console.log('🔧 [FRONTEND] Delete dialog closed');
+          setDeleteDialogOpen(false);
+        }}
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
       >
@@ -430,13 +466,19 @@ const APIs = () => {
         </DialogContent>
         <DialogActions>
           <Button 
-            onClick={() => setDeleteDialogOpen(false)}
+            onClick={() => {
+              console.log('🔧 [FRONTEND] Cancelar button clicked');
+              setDeleteDialogOpen(false);
+            }}
             disabled={deleteAPIMutation.isLoading}
           >
             Cancelar
           </Button>
           <Button 
-            onClick={confirmDeleteAPI} 
+            onClick={() => {
+              console.log('🔧 [FRONTEND] Eliminar button clicked in dialog');
+              confirmDeleteAPI();
+            }}
             color="error"
             variant="contained"
             disabled={deleteAPIMutation.isLoading}
