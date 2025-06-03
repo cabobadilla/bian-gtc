@@ -152,6 +152,7 @@ const APIEditor = () => {
   // Save basic info
   const handleSaveBasicInfo = () => {
     console.log('🔧 [API EDITOR] Attempting to save basic info:', formData);
+    console.log('🔧 [API EDITOR] Current API data:', api);
     
     // Validate required fields
     if (!formData.name || formData.name.trim().length === 0) {
@@ -159,35 +160,30 @@ const APIEditor = () => {
       return;
     }
     
-    // Only send changed fields to avoid unnecessary updates
-    const updatedFields = {};
+    // Always include required fields (like name) and any changed fields
+    const updatedFields = {
+      name: formData.name, // Always include name as it's required by backend
+    };
     
-    if (formData.name !== api.name) {
-      updatedFields.name = formData.name;
-    }
-    if (formData.description !== (api.description || '')) {
+    // Include other fields regardless of whether they changed
+    // This ensures we send all form data to maintain consistency
+    if (formData.description !== undefined) {
       updatedFields.description = formData.description;
     }
-    if (formData.status !== api.status) {
+    if (formData.status !== undefined) {
       updatedFields.status = formData.status;
     }
-    if (formData.visibility !== api.visibility) {
+    if (formData.visibility !== undefined) {
       updatedFields.visibility = formData.visibility;
     }
-    if (formData.category !== api.category) {
+    if (formData.category !== undefined) {
       updatedFields.category = formData.category;
     }
-    if (JSON.stringify(formData.tags) !== JSON.stringify(api.tags || [])) {
+    if (formData.tags !== undefined) {
       updatedFields.tags = formData.tags;
     }
     
     console.log('🔧 [API EDITOR] Sending update fields:', updatedFields);
-    
-    // If no changes, show message
-    if (Object.keys(updatedFields).length === 0) {
-      toast.info('No hay cambios para guardar');
-      return;
-    }
     
     updateAPIMutation.mutate(updatedFields);
   };

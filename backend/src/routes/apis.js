@@ -218,6 +218,8 @@ router.get('/:id', verifyToken, requireAPIAccess('viewer'), async (req, res) => 
   try {
     const { version } = req.query;
     
+    console.log('🔧 [GET API] Request received for API:', req.params.id);
+    
     // Increment view count
     await req.api.incrementViews();
 
@@ -227,17 +229,30 @@ router.get('/:id', verifyToken, requireAPIAccess('viewer'), async (req, res) => 
       { path: 'collaboration.collaborators.user', select: 'name email avatar' }
     ]);
 
+    console.log('🔧 [GET API] API data loaded:', {
+      apiId: apiData._id,
+      name: apiData.name,
+      currentVersion: apiData.currentVersion,
+      versionsCount: apiData.versions?.length || 0,
+      hasCurrentVersionSpec: !!apiData.currentVersionSpec,
+      currentVersionSpecKeys: apiData.currentVersionSpec ? Object.keys(apiData.currentVersionSpec) : null,
+      firstVersionSpec: apiData.versions?.[0]?.openApiSpec ? Object.keys(apiData.versions[0].openApiSpec) : null
+    });
+
     // Get specific version if requested
     let versionData = null;
     if (version) {
       versionData = apiData.getVersion(version);
       if (!versionData) {
+        console.log('❌ [GET API] Version not found:', version);
         return res.status(404).json({
           success: false,
           error: 'Version not found'
         });
       }
     }
+
+    console.log('🔧 [GET API] Sending response with currentVersionSpec:', !!apiData.currentVersionSpec);
 
     res.json({
       success: true,
