@@ -1,35 +1,57 @@
 services:
-  # Unified Production Service - Frontend + Backend
+  # Frontend Service (Unified - serves React build via Express)
   - type: web
     name: bian-gtc
     env: node
     region: oregon
     plan: free
     buildCommand: |
-      echo "🏗️ Building BIAN API Generator..."
+      echo "🎨 Building Frontend for bian-gtc service..."
       echo "📁 Current directory: $(pwd)"
-      echo "📁 Project structure: $(ls -la)"
       
       echo "📦 Installing backend dependencies..."
       cd backend && npm install --production
       
       echo "📦 Installing frontend dependencies..."
-      cd ../frontend && npm install --production && npm audit fix --force
+      cd ../frontend && npm install --production
       
       echo "🔨 Building frontend for production..."
       npm run build
       
       echo "✅ Verifying build output..."
-      echo "📁 Frontend contents: $(ls -la)"
       if [ -d "dist" ]; then
         echo "✅ Frontend build successful - dist/ directory created"
-        echo "📄 Dist contents: $(ls -la dist/)"
       else
         echo "❌ Frontend build failed - dist/ directory not found"
         exit 1
       fi
       
-      echo "🚀 Build completed successfully!"
+      echo "🚀 Frontend build completed successfully!"
+    startCommand: cd backend && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEBUG
+        value: "ON"
+      - key: PORT
+        value: 10000
+      - key: VITE_API_URL
+        value: https://bian-api-backend.onrender.com/api
+      - key: VITE_GOOGLE_CLIENT_ID
+        fromSecret: true
+
+  # Backend API Service  
+  - type: web
+    name: bian-api-backend
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: |
+      echo "⚙️ Building Backend Service..."
+      cd backend
+      npm install --production
+      echo "✅ Backend build completed"
     startCommand: cd backend && npm start
     healthCheckPath: /api/health
     envVars:
@@ -48,4 +70,6 @@ services:
       - key: JWT_SECRET
         fromSecret: true
       - key: PORT
-        value: 10000 
+        value: 10000
+      - key: FRONTEND_URL
+        value: https://bian-gtc.onrender.com 

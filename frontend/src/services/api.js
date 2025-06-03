@@ -1,42 +1,62 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
-// Get backend URL - auto-detect in production, use env variable in development
+// Get backend URL - auto-detect based on architecture
 const getAPIUrl = () => {
-  // If we have explicit environment variable, use it
+  // In development, use explicit env var or localhost fallback
+  if (import.meta.env.DEV) {
+    return import.meta.env.VITE_API_URL || 'http://localhost:10000/api'
+  }
+  
+  // In production, prioritize explicit VITE_API_URL (current architecture)
   if (import.meta.env.VITE_API_URL) {
+    console.log('🔗 Using explicit VITE_API_URL:', import.meta.env.VITE_API_URL)
     return import.meta.env.VITE_API_URL
   }
   
-  // In production, prioritize unified service
+  // Production auto-detection based on current domain
   if (import.meta.env.PROD) {
+    const currentOrigin = window.location.origin
     const currentHost = window.location.hostname
     
-    // If we're on bian-api-frontend.onrender.com (separate frontend service), use backend URL
-    if (currentHost.includes('bian-api-frontend')) {
-      return 'https://bian-api-backend.onrender.com'
+    // Current architecture: Frontend at bian-gtc, Backend at bian-api-backend
+    if (currentHost === 'bian-gtc.onrender.com') {
+      const backendUrl = 'https://bian-api-backend.onrender.com/api'
+      console.log('🔗 bian-gtc frontend detected, using separate backend:', backendUrl)
+      return backendUrl
     }
     
-    // For any other production domain (including bian-gtc.onrender.com), use same origin
-    return `${window.location.origin}/api`
+    // Legacy: separate frontend service
+    if (currentHost === 'bian-api-frontend.onrender.com') {
+      const backendUrl = 'https://bian-api-backend.onrender.com/api'
+      console.log('🔗 Legacy frontend service detected, using backend:', backendUrl)
+      return backendUrl
+    }
+    
+    // Fallback for other production domains (unified architecture)
+    const apiUrl = `${currentOrigin}/api`
+    console.log('🔗 Unknown production domain, assuming unified architecture:', apiUrl)
+    return apiUrl
   }
   
-  // Development fallback
+  // Final fallback
+  console.warn('⚠️ Unexpected environment, falling back to localhost')
   return 'http://localhost:10000/api'
 }
 
 const API_BASE_URL = getAPIUrl()
 
-// Debug logging
-const isDebug = import.meta.env.VITE_DEBUG === 'ON' || import.meta.env.DEBUG === 'ON'
+// Debug logging - always show in production for troubleshooting
+const isDebug = true // Always enable in production for now
+const isProduction = import.meta.env.PROD
 
-if (isDebug) {
-  console.log('🐛 Frontend Debug mode enabled')
-  console.log('🔗 API Base URL:', API_BASE_URL)
-  console.log('🌍 Environment:', import.meta.env.MODE)
-  console.log('🏭 Production:', import.meta.env.PROD)
-  console.log('📍 Origin:', window.location.origin)
-}
+console.log('🏗️ BIAN API Frontend Initialization')
+console.log('🔗 API Base URL:', API_BASE_URL)
+console.log('🌍 Environment Mode:', import.meta.env.MODE)
+console.log('🏭 Production Build:', isProduction)
+console.log('📍 Current Origin:', window.location.origin)
+console.log('📍 Current Hostname:', window.location.hostname)
+console.log('🔧 Vite API URL Env:', import.meta.env.VITE_API_URL)
 
 // Create axios instance
 const api = axios.create({
@@ -51,10 +71,10 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     if (isDebug) {
-      console.log(`🚀 [API REQUEST] ${config.method?.toUpperCase()} ${config.url}`, {
+      console.log(`🚀 [API REQUEST] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`, {
+        fullUrl: `${config.baseURL}${config.url}`,
         data: config.data,
-        params: config.params,
-        headers: config.headers
+        params: config.params
       })
     }
 
@@ -89,23 +109,21 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     if (isDebug) {
-      console.log(`✅ [API RESPONSE] ${response.config.method?.toUpperCase()} ${response.config.url}`, {
+      console.log(`✅ [API RESPONSE] ${response.config.method?.toUpperCase()} ${response.config.baseURL}${response.config.url}`, {
         status: response.status,
-        data: response.data,
-        headers: response.headers
+        data: response.data
       })
     }
     return response
   },
   (error) => {
-    if (isDebug) {
-      console.error(`❌ [API ERROR] ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message,
-        code: error.code
-      })
-    }
+    console.error(`❌ [API ERROR] ${error.config?.method?.toUpperCase()} ${error.config?.baseURL}${error.config?.url}`, {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+      code: error.code,
+      fullUrl: `${error.config?.baseURL}${error.config?.url}`
+    })
 
     if (error.response?.status === 401) {
       // Clear auth and redirect to login
@@ -114,10 +132,14 @@ api.interceptors.response.use(
       toast.error('Session expired. Please login again.')
     } else if (error.response?.status === 403) {
       toast.error('Access denied')
+    } else if (error.response?.status === 404) {
+      toast.error(`Endpoint not found: ${error.config?.url}`)
     } else if (error.response?.status >= 500) {
       toast.error('Server error. Please try again later.')
     } else if (error.code === 'ECONNABORTED') {
       toast.error('Request timeout. Please try again.')
+    } else if (error.code === 'ERR_NETWORK') {
+      toast.error('Network error. Please check your connection.')
     }
     
     return Promise.reject(error)
