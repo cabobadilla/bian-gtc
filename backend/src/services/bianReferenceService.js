@@ -689,11 +689,20 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
 
         const apiData = customizations.apiData;
         
+        // Generate name and slug
+        const apiName = customizations.name || apiData.name;
+        const apiSlug = apiName
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '');
+        
         // Create the API using existing API service
         const API = require('../models/API');
         
         const newAPI = new API({
-          name: customizations.name || `${apiData.name}_Custom`,
+          name: apiName,
+          slug: apiSlug,
           description: customizations.description || apiData.description,
           company: companyId,
           createdBy: userId,
@@ -705,19 +714,11 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
           tags: apiData.tags || [],
           baseReference: {
             type: 'bian-ai-generated',
-            referenceId: null, // Don't set ObjectId for AI-generated APIs
+            // Don't set referenceId for AI-generated APIs to avoid ObjectId casting errors
             referenceName: apiData.name,
             source: 'ai-generated'
           }
         });
-
-        // Generate slug manually before saving
-        const apiName = customizations.name || `${apiData.name}_Custom`;
-        newAPI.slug = apiName
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, '-')
-          .replace(/-+/g, '-')
-          .replace(/^-|-$/g, '');
 
         if (isDebug) {
           console.log('🔧 [CREATE API] AI-generated API object created:', {

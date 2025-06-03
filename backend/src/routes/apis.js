@@ -257,6 +257,108 @@ router.get('/:id', verifyToken, requireAPIAccess('viewer'), async (req, res) => 
 
 /**
  * @swagger
+ * /api/apis/{id}:
+ *   put:
+ *     summary: Update API basic information
+ *     tags: [APIs]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *                 enum: [draft, review, published, deprecated]
+ *               visibility:
+ *                 type: string
+ *                 enum: [private, company, public]
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               category:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: API updated successfully
+ *       400:
+ *         description: Invalid input
+ *       404:
+ *         description: API not found
+ */
+router.put('/:id', verifyToken, requireAPIAccess('editor'), async (req, res) => {
+  try {
+    const { name, description, status, visibility, tags, category } = req.body;
+
+    // Validate input
+    if (name && name.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name cannot be empty'
+      });
+    }
+
+    if (status && !['draft', 'review', 'published', 'deprecated'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid status value'
+      });
+    }
+
+    if (visibility && !['private', 'company', 'public'].includes(visibility)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid visibility value'
+      });
+    }
+
+    // Update fields
+    if (name !== undefined) req.api.name = name.trim();
+    if (description !== undefined) req.api.description = description.trim();
+    if (status !== undefined) req.api.status = status;
+    if (visibility !== undefined) req.api.visibility = visibility;
+    if (tags !== undefined) req.api.tags = Array.isArray(tags) ? tags : [];
+    if (category !== undefined) req.api.category = category;
+
+    await req.api.save();
+
+    // Return updated API
+    const updatedAPI = await req.api.populate([
+      { path: 'createdBy', select: 'name email avatar' },
+      { path: 'company', select: 'name slug logo' }
+    ]);
+
+    res.json({
+      success: true,
+      message: 'API updated successfully',
+      api: updatedAPI
+    });
+
+  } catch (error) {
+    console.error('Update API error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update API'
+    });
+  }
+});
+
+/**
+ * @swagger
  * /api/apis/{id}/enrich:
  *   post:
  *     summary: Enrich API with AI

@@ -194,7 +194,7 @@ const APIDetail = () => {
             <Button
               variant="contained"
               startIcon={<EditIcon />}
-              onClick={() => setEditDialogOpen(true)}
+              onClick={() => navigate(`/apis/${id}/edit`)}
             >
               Editar
             </Button>
