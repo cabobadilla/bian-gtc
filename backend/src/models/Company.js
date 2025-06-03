@@ -26,15 +26,14 @@ const companySchema = new mongoose.Schema({
   industry: {
     type: String,
     enum: [
-      'retail-banking',
-      'commercial-banking',
-      'investment-banking',
-      'insurance',
+      'banking',
       'fintech',
-      'consulting',
+      'insurance',
+      'payments',
+      'cryptocurrency',
       'other'
     ],
-    default: 'retail-banking'
+    default: 'other'
   },
   size: {
     type: String,
@@ -162,13 +161,33 @@ companySchema.methods.addMember = function(userId, role = 'viewer') {
 
 // Pre-save middleware to generate slug
 companySchema.pre('save', function(next) {
-  if (this.isModified('name') && !this.slug) {
-    this.slug = this.name
+  const isDebug = process.env.DEBUG === 'ON';
+  
+  if (isDebug) {
+    console.log('🔧 [COMPANY MODEL] Pre-save middleware triggered:', {
+      name: this.name,
+      isModified_name: this.isModified('name'),
+      currentSlug: this.slug
+    });
+  }
+  
+  if (this.isModified('name')) {
+    const newSlug = this.name
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '');
+    
+    this.slug = newSlug;
+    
+    if (isDebug) {
+      console.log('✅ [COMPANY MODEL] Slug generated:', {
+        originalName: this.name,
+        generatedSlug: newSlug
+      });
+    }
   }
+  
   next();
 });
 

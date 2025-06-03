@@ -57,6 +57,14 @@ router.post('/', verifyToken, async (req, res) => {
     });
 
     if (isDebug) {
+      console.log('💾 [CREATE COMPANY] Company object created:', {
+        name: company.name,
+        slug: company.slug,
+        industry: company.industry,
+        size: company.size,
+        country: company.country,
+        admins: company.admins
+      });
       console.log('💾 [CREATE COMPANY] Saving company to database...');
     }
 
