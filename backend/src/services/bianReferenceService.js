@@ -646,9 +646,16 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
       if (isDebug) {
         console.log('🔧 [CREATE API] Starting creation:', {
           referenceId,
+          referenceIdType: typeof referenceId,
           customizations,
           userId,
           companyId
+        });
+        console.log('🔍 [CREATE API] Checking if AI-generated:', {
+          startsWithAI: referenceId.startsWith('ai-generated-'),
+          startsWithFallback: referenceId.startsWith('fallback-'),
+          startsWithExample: referenceId.startsWith('example-'),
+          referenceIdString: String(referenceId)
         });
       }
 
@@ -691,10 +698,12 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
           }
         });
 
-        // Create a basic OpenAPI spec from the AI-generated data
+        // Save first to trigger pre-save middleware that creates initial version
+        await newAPI.save();
+
+        // Now update the OpenAPI spec of the first version
         const openApiSpec = this.createOpenAPISpecFromAIData(apiData, customizations);
         newAPI.versions[0].openApiSpec = openApiSpec;
-
         await newAPI.save();
 
         if (isDebug) {
@@ -713,6 +722,10 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
       }
 
       // For database APIs, proceed with normal flow
+      if (isDebug) {
+        console.log('🗄️ [CREATE API] Not AI-generated, proceeding with database lookup for:', referenceId);
+      }
+      
       const referenceAPI = await BIANReferenceAPI.findById(referenceId);
       if (!referenceAPI) {
         return {
@@ -753,10 +766,13 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
         }
       });
 
-      // Set the customized spec as the first version
-      newAPI.versions[0].openApiSpec = customSpec;
-
+      // Save first to trigger pre-save middleware that creates initial version
       await newAPI.save();
+
+      // Now update the OpenAPI spec of the first version
+      newAPI.versions[0].openApiSpec = customSpec;
+      await newAPI.save();
+      
       await referenceAPI.incrementPopularity();
 
       if (isDebug) {

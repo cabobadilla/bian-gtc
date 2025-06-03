@@ -145,7 +145,7 @@ const apiSchema = new mongoose.Schema({
   baseReference: {
     type: {
       type: String,
-      enum: ['bian', 'template', 'scratch'],
+      enum: ['bian', 'bian-ai-generated', 'template', 'scratch'],
       default: 'scratch'
     },
     referenceId: {
@@ -157,6 +157,9 @@ const apiSchema = new mongoose.Schema({
     },
     createdFromReference: {
       type: Date
+    },
+    source: {
+      type: String
     }
   },
   isActive: {
