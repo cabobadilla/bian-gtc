@@ -67,6 +67,8 @@ const APIEditor = () => {
   const { data: apiData, isLoading, error } = useQuery({
     queryKey: ['api-detail', id],
     queryFn: () => apiService.getAPI(id),
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
     onSuccess: (data) => {
       const api = data.data.api;
       
@@ -116,6 +118,35 @@ const APIEditor = () => {
   });
 
   const api = apiData?.data?.api;
+
+  // Additional effect to handle spec loading after API data changes
+  useEffect(() => {
+    if (api) {
+      console.log('🔧 [API EDITOR] useEffect - API data changed, re-checking spec:', {
+        hasCurrentVersionSpec: !!api.currentVersionSpec,
+        hasVersions: !!api.versions,
+        versionsLength: api.versions?.length,
+        currentSpecData: specData.length
+      });
+      
+      // Only update if we don't have spec data yet
+      if (!specData || specData.trim() === '') {
+        let specToSet = '';
+        
+        if (api.currentVersionSpec) {
+          specToSet = JSON.stringify(api.currentVersionSpec, null, 2);
+          console.log('🔧 [API EDITOR] useEffect - Setting currentVersionSpec, length:', specToSet.length);
+        } else if (api.versions && api.versions.length > 0 && api.versions[0].openApiSpec) {
+          specToSet = JSON.stringify(api.versions[0].openApiSpec, null, 2);
+          console.log('🔧 [API EDITOR] useEffect - Setting first version openApiSpec, length:', specToSet.length);
+        }
+        
+        if (specToSet) {
+          setSpecData(specToSet);
+        }
+      }
+    }
+  }, [api, specData]);
 
   // Update basic API info
   const updateAPIMutation = useMutation({
