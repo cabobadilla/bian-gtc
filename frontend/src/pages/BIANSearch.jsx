@@ -38,7 +38,7 @@ import {
   Code as CodeIcon,
   Lightbulb as LightbulbIcon,
   SmartToy as SmartToyIcon,
-  Database as DatabaseIcon,
+  Storage as DatabaseIcon,
   AutoAwesome as AutoAwesomeIcon,
   Insights as InsightsIcon,
   ExpandMore as ExpandMoreIcon,
