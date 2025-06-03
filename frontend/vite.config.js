@@ -1,16 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
+// Optimized Vite config for BIAN API Generator
 export default defineConfig({
   plugins: [react()],
-  server: {
-    port: 3000,
-    host: true
-  },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    minify: 'terser',
     rollupOptions: {
       output: {
         manualChunks: {
@@ -18,11 +15,13 @@ export default defineConfig({
           mui: ['@mui/material', '@mui/icons-material'],
           router: ['react-router-dom'],
           query: ['react-query'],
-          utils: ['axios', 'react-hot-toast']
+          utils: ['axios', 'react-hot-toast'],
+          editor: ['@monaco-editor/react', 'swagger-ui-react']
         }
       }
     },
-    chunkSizeWarningLimit: 600 // Increase warning limit slightly
+    chunkSizeWarningLimit: 800,
+    sourcemap: false // Disable sourcemaps for production
   },
   define: {
     'process.env': process.env

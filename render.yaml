@@ -1,29 +1,35 @@
 services:
-  # Unified Service - Backend + Frontend (Primary)
+  # Unified Production Service - Frontend + Backend
   - type: web
     name: bian-gtc
     env: node
     region: oregon
     plan: free
     buildCommand: |
-      echo "🏗️ Building unified service..."
+      echo "🏗️ Building BIAN API Generator..."
       echo "📁 Current directory: $(pwd)"
-      echo "📁 Directory contents: $(ls -la)"
+      echo "📁 Project structure: $(ls -la)"
       
-      echo "📁 Installing backend dependencies..."
-      cd backend && npm install
+      echo "📦 Installing backend dependencies..."
+      cd backend && npm install --production
       
-      echo "📁 Installing frontend dependencies..."
-      cd ../frontend && npm install && npm audit fix --force
+      echo "📦 Installing frontend dependencies..."
+      cd ../frontend && npm install --production && npm audit fix --force
       
-      echo "🔨 Building frontend..."
+      echo "🔨 Building frontend for production..."
       npm run build
       
-      echo "✅ Checking build output..."
-      echo "📁 Frontend directory contents: $(ls -la)"
-      echo "📁 Dist directory contents: $(ls -la dist/ 2>/dev/null || echo 'dist directory not found')"
+      echo "✅ Verifying build output..."
+      echo "📁 Frontend contents: $(ls -la)"
+      if [ -d "dist" ]; then
+        echo "✅ Frontend build successful - dist/ directory created"
+        echo "📄 Dist contents: $(ls -la dist/)"
+      else
+        echo "❌ Frontend build failed - dist/ directory not found"
+        exit 1
+      fi
       
-      echo "✅ Build completed!"
+      echo "🚀 Build completed successfully!"
     startCommand: cd backend && npm start
     healthCheckPath: /api/health
     envVars:
@@ -42,46 +48,4 @@ services:
       - key: JWT_SECRET
         fromSecret: true
       - key: PORT
-        value: 10000
-
-  # Backend API Service (Alternative - keep for backup)
-  - type: web
-    name: bian-api-backend
-    env: node
-    region: oregon
-    plan: free
-    rootDirectory: backend
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /api/health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: DEBUG
-        value: "ON"
-      - key: MONGODB_URI
-        fromSecret: true
-      - key: GOOGLE_CLIENT_ID
-        fromSecret: true
-      - key: GOOGLE_CLIENT_SECRET
-        fromSecret: true
-      - key: OPENAI_API_KEY
-        fromSecret: true
-      - key: JWT_SECRET
-        fromSecret: true
-      - key: PORT
-        value: 10000
-
-  # Frontend Static Site (Alternative - keep for backup)
-  - type: static
-    name: bian-api-frontend
-    region: oregon
-    plan: free
-    rootDirectory: frontend
-    buildCommand: npm install && npm audit fix --force && npm run build
-    staticPublishPath: dist
-    envVars:
-      - key: VITE_API_URL
-        value: https://bian-api-backend.onrender.com
-      - key: VITE_DEBUG
-        value: "ON" 
+        value: 10000 
