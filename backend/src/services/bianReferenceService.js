@@ -7,6 +7,7 @@ class BIANReferenceService {
   
   /**
    * Search BIAN reference APIs by keyword and filters
+   * Now prioritizes AI-powered search for better natural language understanding
    */
   async searchAPIs(searchQuery, options = {}) {
     try {
@@ -25,86 +26,102 @@ class BIANReferenceService {
         });
       }
 
-      let results;
-
-      if (searchQuery) {
-        results = await BIANReferenceAPI.searchByKeyword(searchQuery, {
-          serviceDomain,
-          complexity,
-          limit,
-          sort
-        });
-      } else {
-        // If no search query, get popular APIs
+      // For empty queries, return popular/example APIs
+      if (!searchQuery || searchQuery.trim().length === 0) {
         const query = { isActive: true };
         if (serviceDomain) query.serviceDomain = serviceDomain;
         if (complexity) query.complexity = complexity;
 
         const sortOptions = sort === 'popularity' ? { popularity: -1 } : { createdAt: -1 };
-        results = await BIANReferenceAPI.find(query)
+        const results = await BIANReferenceAPI.find(query)
           .sort(sortOptions)
           .limit(limit);
+
+        // If no database results, show popular examples
+        if (results.length === 0) {
+          const exampleAPIs = this.getPopularExampleAPIs(language);
+          return {
+            success: true,
+            results: exampleAPIs,
+            count: exampleAPIs.length,
+            source: 'examples'
+          };
+        }
+
+        return {
+          success: true,
+          results: results.map(api => ({
+            ...api.toObject(),
+            localizedDescription: api.getEnrichedDescription(language)
+          })),
+          count: results.length,
+          source: 'database'
+        };
       }
 
+      // Always try AI-powered search first for natural language understanding
       if (isDebug) {
-        console.log('📊 [BIAN SEARCH] Database results:', {
-          count: results.length,
-          hasResults: results.length > 0
+        console.log('🤖 [BIAN SEARCH] Using AI-powered search for natural language understanding');
+      }
+      
+      try {
+        const aiResults = await this.generateIntelligentBIANSuggestions(searchQuery, {
+          serviceDomain,
+          complexity,
+          language,
+          limit
+        });
+        
+        if (aiResults.success && aiResults.suggestions.length > 0) {
+          return {
+            success: true,
+            results: aiResults.suggestions,
+            count: aiResults.suggestions.length,
+            source: 'ai-intelligent',
+            interpretation: aiResults.interpretation
+          };
+        }
+      } catch (error) {
+        if (isDebug) {
+          console.log('⚠️ [BIAN SEARCH] AI search failed, trying database fallback:', error.message);
+        }
+      }
+
+      // Fallback to database search if AI fails
+      const results = await BIANReferenceAPI.searchByKeyword(searchQuery, {
+        serviceDomain,
+        complexity,
+        limit,
+        sort
+      });
+
+      if (isDebug) {
+        console.log('📊 [BIAN SEARCH] Database fallback results:', {
+          count: results.length
         });
       }
 
-      // If no results from database, use ChatGPT to generate BIAN-compliant suggestions
-      if (results.length === 0 && searchQuery) {
-        if (isDebug) {
-          console.log('🤖 [BIAN SEARCH] No DB results, using ChatGPT...');
-        }
-        
-        // Use Promise.race to implement timeout
-        const aiPromise = this.generateBIANSuggestions(searchQuery, language);
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('AI_TIMEOUT')), 8000) // 8 second timeout
-        );
-        
-        try {
-          const aiResults = await Promise.race([aiPromise, timeoutPromise]);
-          
-          if (aiResults.success) {
-            return {
-              success: true,
-              results: aiResults.suggestions,
-              count: aiResults.suggestions.length,
-              source: 'ai-generated'
-            };
-          }
-        } catch (error) {
-          if (isDebug) {
-            console.log('⏰ [BIAN SEARCH] AI timeout or error, using fallback:', error.message);
-          }
-          
-          // Immediate fallback on timeout or error
-          const fallbackSuggestions = this.generateFallbackSuggestions(searchQuery, language);
-          
-          return {
-            success: true,
-            results: fallbackSuggestions,
-            count: fallbackSuggestions.length,
-            source: 'fallback-timeout',
-            note: 'AI service timeout, showing contextual suggestions'
-          };
-        }
+      if (results.length > 0) {
+        return {
+          success: true,
+          results: results.map(api => ({
+            ...api.toObject(),
+            localizedDescription: api.getEnrichedDescription(language)
+          })),
+          count: results.length,
+          source: 'database-fallback'
+        };
       }
 
-      // Enrich results with localized descriptions
-      const enrichedResults = results.map(api => ({
-        ...api.toObject(),
-        localizedDescription: api.getEnrichedDescription(language)
-      }));
-
+      // Final fallback to contextual suggestions
+      const fallbackSuggestions = this.generateEnhancedFallbackSuggestions(searchQuery, language);
+      
       return {
         success: true,
-        results: enrichedResults,
-        count: enrichedResults.length,
-        source: 'database'
+        results: fallbackSuggestions,
+        count: fallbackSuggestions.length,
+        source: 'fallback-enhanced',
+        note: 'Sugerencias contextuales basadas en tu búsqueda'
       };
 
     } catch (error) {
@@ -118,253 +135,496 @@ class BIANReferenceService {
   }
 
   /**
-   * Generate BIAN API suggestions using ChatGPT
+   * Generate intelligent BIAN API suggestions using enhanced ChatGPT prompts
    */
-  async generateBIANSuggestions(searchQuery, language = 'en') {
+  async generateIntelligentBIANSuggestions(searchQuery, options = {}) {
     try {
+      const { serviceDomain, complexity, language = 'en', limit = 6 } = options;
+
       if (isDebug) {
-        console.log('🤖 [AI SUGGESTIONS] Generating for query:', searchQuery);
+        console.log('🧠 [INTELLIGENT SEARCH] Generating for query:', searchQuery);
       }
 
       const systemPrompt = language === 'es' 
-        ? `Eres un experto en estándares BIAN (Banking Industry Architecture Network). Genera sugerencias de APIs BIAN basadas en la consulta del usuario.
+        ? `Eres un experto en estándares BIAN (Banking Industry Architecture Network) v12 con profundo conocimiento de arquitectura bancaria moderna.
 
-Para cada API sugerida, proporciona:
-1. Nombre descriptivo de la API
-2. Dominio de servicio BIAN apropiado
-3. Descripción clara de la funcionalidad
-4. Operaciones principales (métodos HTTP)
-5. Nivel de complejidad (low/medium/high)
+Tu tarea es interpretar consultas de búsqueda en lenguaje natural y generar APIs BIAN precisas y relevantes.
 
-Responde en formato JSON con un array de APIs sugeridas. Máximo 6 sugerencias.`
-        : `You are an expert in BIAN (Banking Industry Architecture Network) standards. Generate BIAN API suggestions based on the user's search query.
+CONOCIMIENTO BIAN ACTUALIZADO:
+- Dominios principales: Customer Management, Account Management, Payment Order, Transaction Processing, Credit Management, Risk Assessment, Compliance, Product Management, Market Operations
+- Patrones funcionales: Service Domain, Control Record, Operational Control, Analytical Control, Support Control
+- Operaciones estándar: Retrieve, Update, Create, Execute, Evaluate, Register, Initiate, Configure
 
-For each suggested API, provide:
-1. Descriptive API name
-2. Appropriate BIAN service domain
-3. Clear functionality description
-4. Main operations (HTTP methods)
-5. Complexity level (low/medium/high)
+INSTRUCCIONES ESPECÍFICAS:
+1. Interpreta la intención real detrás de la consulta
+2. Identifica el dominio BIAN más relevante
+3. Genera APIs específicas y prácticas 
+4. Incluye operaciones completas y realistas
+5. Asegura compatibilidad con estándares bancarios
+6. Proporciona descripciones claras y detalladas
 
-Respond in JSON format with an array of suggested APIs. Maximum 6 suggestions.`;
+Para cada API, incluye:
+- Nombre descriptivo y profesional
+- Dominio de servicio BIAN apropiado  
+- Descripción funcional clara
+- Operaciones principales con métodos HTTP correctos
+- Nivel de complejidad realista
+- Keywords relevantes para búsqueda
+- Casos de uso específicos
 
-      const userPrompt = `Generate BIAN API suggestions for: "${searchQuery}"
+Responde SOLO en formato JSON válido.`
+        : `You are a BIAN (Banking Industry Architecture Network) v12 expert with deep knowledge of modern banking architecture.
 
-IMPORTANT: Return ONLY valid JSON without any markdown formatting or code blocks.
+Your task is to interpret natural language search queries and generate precise, relevant BIAN APIs.
 
-JSON format:
+UPDATED BIAN KNOWLEDGE:
+- Main domains: Customer Management, Account Management, Payment Order, Transaction Processing, Credit Management, Risk Assessment, Compliance, Product Management, Market Operations
+- Functional patterns: Service Domain, Control Record, Operational Control, Analytical Control, Support Control
+- Standard operations: Retrieve, Update, Create, Execute, Evaluate, Register, Initiate, Configure
+
+SPECIFIC INSTRUCTIONS:
+1. Interpret the real intention behind the query
+2. Identify the most relevant BIAN domain
+3. Generate specific and practical APIs
+4. Include complete and realistic operations
+5. Ensure compatibility with banking standards
+6. Provide clear and detailed descriptions
+
+For each API, include:
+- Descriptive and professional name
+- Appropriate BIAN service domain
+- Clear functional description
+- Main operations with correct HTTP methods
+- Realistic complexity level
+- Relevant keywords for search
+- Specific use cases
+
+Respond ONLY in valid JSON format.`;
+
+      const contextualHints = this.generateContextualHints(searchQuery, serviceDomain, complexity, language);
+
+      const userPrompt = `Analiza esta consulta de búsqueda e interpreta la intención del usuario para generar APIs BIAN relevantes:
+
+CONSULTA: "${searchQuery}"
+${serviceDomain ? `DOMINIO PREFERIDO: ${serviceDomain}` : ''}
+${complexity ? `COMPLEJIDAD PREFERIDA: ${complexity}` : ''}
+
+CONTEXTO ADICIONAL:
+${contextualHints}
+
+IMPORTANTE: 
+- Interpreta la consulta en lenguaje natural
+- Si menciona "customer profile", piensa en gestión de clientes, perfiles, datos demográficos
+- Si menciona "payment", piensa en procesamiento de pagos, órdenes, transferencias
+- Si menciona "account", piensa en gestión de cuentas, saldos, operaciones
+- Genera máximo ${limit} APIs más relevantes
+
+Formato JSON requerido:
 {
+  "interpretation": {
+    "query": "consulta original",
+    "intent": "intención detectada",
+    "domain": "dominio BIAN principal identificado",
+    "keywords": ["palabras", "clave", "identificadas"]
+  },
   "suggestions": [
     {
-      "_id": "ai-generated-1",
-      "name": "API Name",
-      "serviceDomain": "Service Domain",
-      "description": "Description",
+      "_id": "ai-intelligent-1",
+      "name": "Nombre Descriptivo de la API",
+      "serviceDomain": "Dominio BIAN",
+      "description": "Descripción detallada de funcionalidad",
       "complexity": "low|medium|high",
       "serviceOperations": [
         {
-          "name": "Operation Name",
+          "name": "Nombre Operación",
           "method": "GET|POST|PUT|DELETE",
-          "description": "Operation description"
+          "description": "Descripción específica",
+          "path": "/endpoint/path"
         }
       ],
-      "tags": ["tag1", "tag2"],
+      "tags": ["etiquetas", "relevantes"],
+      "searchKeywords": ["palabras", "clave", "búsqueda"],
+      "useCases": [
+        {
+          "title": "Caso de uso",
+          "description": "Descripción del caso",
+          "example": "Ejemplo específico"
+        }
+      ],
+      "businessCapabilities": ["capacidades", "negocio"],
+      "functionalPattern": "Service Domain",
       "popularity": 0
     }
   ]
 }`;
 
       const completion = await openaiService.openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o-mini", // Usar el modelo más avanzado disponible
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        temperature: 0.3,
-        max_tokens: 1500
+        temperature: 0.2, // Menor temperatura para respuestas más consistentes
+        max_tokens: 3000,
+        response_format: { type: "json_object" }
       });
 
       const responseText = completion.choices[0].message.content;
       
       if (isDebug) {
-        console.log('🤖 [AI SUGGESTIONS] Raw response:', responseText);
+        console.log('🧠 [INTELLIGENT SEARCH] Raw response length:', responseText.length);
       }
 
-      // Clean the response to remove markdown formatting and extract JSON
-      let cleanedResponse = responseText;
-      
-      // Remove markdown code blocks
-      cleanedResponse = cleanedResponse.replace(/```json\s*/g, '');
-      cleanedResponse = cleanedResponse.replace(/```\s*/g, '');
-      
-      // Remove any leading/trailing whitespace
-      cleanedResponse = cleanedResponse.trim();
-      
-      // Find JSON object boundaries if there's extra text
-      const jsonStart = cleanedResponse.indexOf('{');
-      const jsonEnd = cleanedResponse.lastIndexOf('}');
-      
-      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-        cleanedResponse = cleanedResponse.substring(jsonStart, jsonEnd + 1);
-      }
-
-      if (isDebug) {
-        console.log('🧹 [AI SUGGESTIONS] Cleaned response:', cleanedResponse);
-      }
-
-      // Parse JSON response
-      const parsedResponse = JSON.parse(cleanedResponse);
+      const parsedResponse = JSON.parse(responseText);
       
       if (isDebug) {
-        console.log('✅ [AI SUGGESTIONS] Generated suggestions:', {
-          count: parsedResponse.suggestions?.length || 0
+        console.log('✅ [INTELLIGENT SEARCH] Generated suggestions:', {
+          count: parsedResponse.suggestions?.length || 0,
+          interpretation: parsedResponse.interpretation
         });
       }
 
       return {
         success: true,
         suggestions: parsedResponse.suggestions || [],
+        interpretation: parsedResponse.interpretation,
         usage: completion.usage
       };
 
     } catch (error) {
-      console.error('AI suggestions error:', error);
+      console.error('Intelligent BIAN suggestions error:', error);
       
       if (isDebug) {
-        console.log('💥 [AI SUGGESTIONS] Error details:', {
+        console.log('💥 [INTELLIGENT SEARCH] Error details:', {
           errorType: error.constructor.name,
           message: error.message,
           searchQuery
         });
       }
 
-      // If JSON parsing fails, return fallback suggestions
-      if (error instanceof SyntaxError) {
-        console.log('🔄 [AI SUGGESTIONS] JSON parsing failed, using fallback suggestions');
-        
-        const fallbackSuggestions = this.generateFallbackSuggestions(searchQuery, language);
-        
-        return {
-          success: true,
-          suggestions: fallbackSuggestions,
-          source: 'fallback',
-          note: 'AI service unavailable, showing fallback suggestions'
-        };
-      }
-      
       return {
         success: false,
-        error: 'Failed to generate AI suggestions',
+        error: 'Failed to generate intelligent suggestions',
         details: error.message
       };
     }
   }
 
   /**
-   * Generate fallback suggestions when AI fails
+   * Generate contextual hints for better AI understanding
    */
-  generateFallbackSuggestions(searchQuery, language = 'en') {
+  generateContextualHints(searchQuery, serviceDomain, complexity, language) {
+    const query = searchQuery.toLowerCase();
+    const hints = [];
+
+    // Domain-specific hints
+    if (query.includes('customer') || query.includes('cliente')) {
+      hints.push('🎯 Focus: Customer data management, profiles, demographics, interactions, preferences');
+    }
+    if (query.includes('payment') || query.includes('pago')) {
+      hints.push('🎯 Focus: Payment processing, orders, transfers, settlements, clearing');
+    }
+    if (query.includes('account') || query.includes('cuenta')) {
+      hints.push('🎯 Focus: Account management, balances, transactions, statements, products');
+    }
+    if (query.includes('risk') || query.includes('riesgo')) {
+      hints.push('🎯 Focus: Risk assessment, scoring, monitoring, compliance, analysis');
+    }
+    if (query.includes('loan') || query.includes('prestamo') || query.includes('credit')) {
+      hints.push('🎯 Focus: Credit management, loan origination, underwriting, collections');
+    }
+
+    // Operation type hints
+    if (query.includes('retrieve') || query.includes('get') || query.includes('consultar')) {
+      hints.push('📊 Operations: Focus on GET operations for data retrieval');
+    }
+    if (query.includes('create') || query.includes('new') || query.includes('crear')) {
+      hints.push('📊 Operations: Focus on POST operations for creation');
+    }
+    if (query.includes('update') || query.includes('modify') || query.includes('actualizar')) {
+      hints.push('📊 Operations: Focus on PUT/PATCH operations for updates');
+    }
+
+    return hints.join('\n');
+  }
+
+  /**
+   * Get popular example APIs for empty searches
+   */
+  getPopularExampleAPIs(language = 'en') {
     const isSpanish = language === 'es';
     
-    // Create contextual suggestions based on search query
-    const suggestions = [];
-    const query = searchQuery.toLowerCase();
-    
-    if (query.includes('pago') || query.includes('payment')) {
-      suggestions.push({
-        _id: 'fallback-payment-1',
-        name: isSpanish ? 'Gestión de Órdenes de Pago' : 'Payment Order Management',
-        serviceDomain: 'Payment Processing',
+    return [
+      {
+        _id: 'popular-example-1',
+        name: isSpanish ? 'Gestión de Perfiles de Cliente' : 'Customer Profile Management',
+        serviceDomain: 'Customer Management',
         description: isSpanish 
-          ? 'API para gestionar órdenes de pago y transferencias bancarias'
-          : 'API to manage payment orders and bank transfers',
+          ? 'API integral para gestionar perfiles completos de clientes, incluyendo datos demográficos, preferencias, comportamientos e historial de interacciones'
+          : 'Comprehensive API for managing complete customer profiles, including demographics, preferences, behaviors, and interaction history',
+        complexity: 'medium',
+        serviceOperations: [
+          {
+            name: isSpanish ? 'Obtener Perfil Cliente' : 'Retrieve Customer Profile',
+            method: 'GET',
+            description: isSpanish ? 'Obtener el perfil completo del cliente' : 'Get complete customer profile',
+            path: '/customer-profile/{customerId}'
+          },
+          {
+            name: isSpanish ? 'Actualizar Perfil' : 'Update Profile',
+            method: 'PUT',
+            description: isSpanish ? 'Actualizar información del perfil' : 'Update profile information',
+            path: '/customer-profile/{customerId}'
+          },
+          {
+            name: isSpanish ? 'Registrar Interacción' : 'Register Interaction',
+            method: 'POST',
+            description: isSpanish ? 'Registrar nueva interacción del cliente' : 'Register new customer interaction',
+            path: '/customer-profile/{customerId}/interactions'
+          }
+        ],
+        tags: ['customer', 'profile', 'management', 'demographics'],
+        searchKeywords: ['customer', 'profile', 'cliente', 'perfil', 'demographics', 'behavior'],
+        functionalPattern: 'Service Domain',
+        popularity: 95
+      },
+      {
+        _id: 'popular-example-2',
+        name: isSpanish ? 'Procesamiento de Órdenes de Pago' : 'Payment Order Processing',
+        serviceDomain: 'Payment Order',
+        description: isSpanish 
+          ? 'API para procesar y gestionar órdenes de pago, transferencias y transacciones financieras'
+          : 'API to process and manage payment orders, transfers, and financial transactions',
         complexity: 'high',
         serviceOperations: [
           {
-            name: isSpanish ? 'Iniciar Pago' : 'Initiate Payment',
+            name: isSpanish ? 'Iniciar Orden de Pago' : 'Initiate Payment Order',
             method: 'POST',
-            description: isSpanish ? 'Iniciar una nueva orden de pago' : 'Start a new payment order'
+            description: isSpanish ? 'Iniciar nueva orden de pago' : 'Initiate new payment order',
+            path: '/payment-order'
           },
           {
             name: isSpanish ? 'Consultar Estado' : 'Check Status',
             method: 'GET',
-            description: isSpanish ? 'Verificar el estado del pago' : 'Check payment status'
+            description: isSpanish ? 'Verificar estado de la orden' : 'Check order status',
+            path: '/payment-order/{orderId}/status'
+          },
+          {
+            name: isSpanish ? 'Ejecutar Pago' : 'Execute Payment',
+            method: 'POST',
+            description: isSpanish ? 'Ejecutar el procesamiento del pago' : 'Execute payment processing',
+            path: '/payment-order/{orderId}/execute'
           }
         ],
-        tags: ['payment', 'transfer', 'banking'],
-        popularity: 0
-      });
-    }
-    
-    if (query.includes('cliente') || query.includes('customer')) {
-      suggestions.push({
-        _id: 'fallback-customer-1',
-        name: isSpanish ? 'Gestión de Información del Cliente' : 'Customer Information Management',
-        serviceDomain: 'Customer Management',
+        tags: ['payment', 'order', 'transfer', 'processing'],
+        searchKeywords: ['payment', 'pago', 'transfer', 'order', 'transaction'],
+        functionalPattern: 'Service Domain',
+        popularity: 90
+      },
+      {
+        _id: 'popular-example-3',
+        name: isSpanish ? 'Gestión de Cuentas Bancarias' : 'Bank Account Management',
+        serviceDomain: 'Account Management',
         description: isSpanish 
-          ? 'API para gestionar perfiles e información de clientes'
-          : 'API to manage customer profiles and information',
+          ? 'API para gestionar cuentas bancarias, saldos, transacciones y productos asociados'
+          : 'API to manage bank accounts, balances, transactions, and associated products',
         complexity: 'medium',
         serviceOperations: [
           {
-            name: isSpanish ? 'Obtener Cliente' : 'Get Customer',
+            name: isSpanish ? 'Consultar Saldo' : 'Check Balance',
             method: 'GET',
-            description: isSpanish ? 'Obtener información del cliente' : 'Retrieve customer information'
+            description: isSpanish ? 'Consultar saldo actual de la cuenta' : 'Check current account balance',
+            path: '/account/{accountId}/balance'
           },
           {
-            name: isSpanish ? 'Actualizar Cliente' : 'Update Customer',
+            name: isSpanish ? 'Obtener Transacciones' : 'Get Transactions',
+            method: 'GET',
+            description: isSpanish ? 'Obtener historial de transacciones' : 'Get transaction history',
+            path: '/account/{accountId}/transactions'
+          },
+          {
+            name: isSpanish ? 'Actualizar Cuenta' : 'Update Account',
             method: 'PUT',
-            description: isSpanish ? 'Actualizar datos del cliente' : 'Update customer data'
+            description: isSpanish ? 'Actualizar información de la cuenta' : 'Update account information',
+            path: '/account/{accountId}'
           }
         ],
-        tags: ['customer', 'profile', 'management'],
-        popularity: 0
-      });
-    }
+        tags: ['account', 'balance', 'transactions', 'banking'],
+        searchKeywords: ['account', 'cuenta', 'balance', 'saldo', 'transactions'],
+        functionalPattern: 'Service Domain',
+        popularity: 85
+      }
+    ];
+  }
+
+  /**
+   * Generate enhanced fallback suggestions with better contextual understanding
+   */
+  generateEnhancedFallbackSuggestions(searchQuery, language = 'en') {
+    const isSpanish = language === 'es';
+    const suggestions = [];
+    const query = searchQuery.toLowerCase();
     
-    // If no specific matches, add generic banking APIs
-    if (suggestions.length === 0) {
+    // Enhanced customer-related suggestions
+    if (query.includes('customer') || query.includes('cliente') || query.includes('profile') || query.includes('perfil')) {
       suggestions.push(
         {
-          _id: 'fallback-generic-1',
-          name: isSpanish ? 'Gestión de Cuentas' : 'Account Management',
-          serviceDomain: 'Account Management',
+          _id: 'enhanced-customer-1',
+          name: isSpanish ? 'Gestión de Perfiles de Cliente' : 'Customer Profile Management',
+          serviceDomain: 'Customer Management',
           description: isSpanish 
-            ? 'API para gestionar cuentas bancarias y operaciones'
-            : 'API to manage bank accounts and operations',
+            ? 'API completa para gestionar perfiles de clientes, incluyendo datos demográficos, preferencias, comportamientos e historial de interacciones bancarias'
+            : 'Complete API for managing customer profiles, including demographics, preferences, behaviors, and banking interaction history',
           complexity: 'medium',
           serviceOperations: [
             {
-              name: isSpanish ? 'Consultar Saldo' : 'Check Balance',
+              name: isSpanish ? 'Obtener Perfil Cliente' : 'Retrieve Customer Profile',
               method: 'GET',
-              description: isSpanish ? 'Consultar saldo de cuenta' : 'Check account balance'
+              description: isSpanish ? 'Obtener perfil completo del cliente con todos sus datos' : 'Get complete customer profile with all data',
+              path: '/customer-profile/{customerId}'
+            },
+            {
+              name: isSpanish ? 'Actualizar Perfil' : 'Update Profile',
+              method: 'PUT',
+              description: isSpanish ? 'Actualizar información demográfica y preferencias' : 'Update demographic information and preferences',
+              path: '/customer-profile/{customerId}'
+            },
+            {
+              name: isSpanish ? 'Analizar Comportamiento' : 'Analyze Behavior',
+              method: 'POST',
+              description: isSpanish ? 'Analizar patrones de comportamiento del cliente' : 'Analyze customer behavior patterns',
+              path: '/customer-profile/{customerId}/behavior-analysis'
             }
           ],
-          tags: ['account', 'balance', 'banking'],
+          tags: ['customer', 'profile', 'management', 'demographics', 'behavior'],
+          searchKeywords: ['customer', 'profile', 'cliente', 'perfil', 'demographics', 'behavior', 'data'],
+          functionalPattern: 'Service Domain',
           popularity: 0
         },
         {
-          _id: 'fallback-generic-2',
-          name: isSpanish ? 'Procesamiento de Transacciones' : 'Transaction Processing',
-          serviceDomain: 'Payment Processing',
+          _id: 'enhanced-customer-2',
+          name: isSpanish ? 'Onboarding de Clientes' : 'Customer Onboarding',
+          serviceDomain: 'Customer Management',
           description: isSpanish 
-            ? 'API para procesar transacciones financieras'
-            : 'API to process financial transactions',
+            ? 'API para gestionar el proceso completo de incorporación de nuevos clientes al banco'
+            : 'API to manage the complete process of onboarding new customers to the bank',
           complexity: 'high',
           serviceOperations: [
             {
-              name: isSpanish ? 'Procesar Transacción' : 'Process Transaction',
+              name: isSpanish ? 'Iniciar Onboarding' : 'Initiate Onboarding',
               method: 'POST',
-              description: isSpanish ? 'Procesar una nueva transacción' : 'Process a new transaction'
+              description: isSpanish ? 'Iniciar proceso de incorporación de cliente' : 'Start customer onboarding process',
+              path: '/customer-onboarding'
+            },
+            {
+              name: isSpanish ? 'Verificar Identidad' : 'Verify Identity',
+              method: 'POST',
+              description: isSpanish ? 'Verificar identidad del cliente' : 'Verify customer identity',
+              path: '/customer-onboarding/{processId}/verify-identity'
             }
           ],
-          tags: ['transaction', 'processing', 'finance'],
+          tags: ['customer', 'onboarding', 'verification', 'kyc'],
+          searchKeywords: ['customer', 'onboarding', 'cliente', 'incorporacion', 'verification'],
+          functionalPattern: 'Service Domain',
+          popularity: 0
+        }
+      );
+    }
+
+    // Enhanced payment-related suggestions
+    if (query.includes('payment') || query.includes('pago') || query.includes('transfer') || query.includes('transaction')) {
+      suggestions.push(
+        {
+          _id: 'enhanced-payment-1',
+          name: isSpanish ? 'Procesamiento de Pagos Digitales' : 'Digital Payment Processing',
+          serviceDomain: 'Payment Order',
+          description: isSpanish 
+            ? 'API avanzada para procesar pagos digitales, transferencias instantáneas y gestión de órdenes de pago'
+            : 'Advanced API for processing digital payments, instant transfers, and payment order management',
+          complexity: 'high',
+          serviceOperations: [
+            {
+              name: isSpanish ? 'Procesar Pago Instantáneo' : 'Process Instant Payment',
+              method: 'POST',
+              description: isSpanish ? 'Procesar pago en tiempo real' : 'Process real-time payment',
+              path: '/digital-payment/instant'
+            },
+            {
+              name: isSpanish ? 'Validar Fondos' : 'Validate Funds',
+              method: 'POST',
+              description: isSpanish ? 'Validar disponibilidad de fondos' : 'Validate fund availability',
+              path: '/digital-payment/validate-funds'
+            }
+          ],
+          tags: ['payment', 'digital', 'instant', 'transfer'],
+          searchKeywords: ['payment', 'pago', 'digital', 'instant', 'transfer', 'real-time'],
+          functionalPattern: 'Service Domain',
+          popularity: 0
+        }
+      );
+    }
+
+    // Enhanced account-related suggestions
+    if (query.includes('account') || query.includes('cuenta') || query.includes('balance') || query.includes('saldo')) {
+      suggestions.push(
+        {
+          _id: 'enhanced-account-1',
+          name: isSpanish ? 'Gestión Integral de Cuentas' : 'Comprehensive Account Management',
+          serviceDomain: 'Account Management',
+          description: isSpanish 
+            ? 'API completa para gestionar cuentas bancarias, productos asociados, saldos y operaciones'
+            : 'Complete API for managing bank accounts, associated products, balances, and operations',
+          complexity: 'medium',
+          serviceOperations: [
+            {
+              name: isSpanish ? 'Consultar Saldo en Tiempo Real' : 'Real-time Balance Inquiry',
+              method: 'GET',
+              description: isSpanish ? 'Obtener saldo actualizado en tiempo real' : 'Get real-time updated balance',
+              path: '/account/{accountId}/real-time-balance'
+            },
+            {
+              name: isSpanish ? 'Gestionar Productos' : 'Manage Products',
+              method: 'GET',
+              description: isSpanish ? 'Gestionar productos asociados a la cuenta' : 'Manage products associated with account',
+              path: '/account/{accountId}/products'
+            }
+          ],
+          tags: ['account', 'balance', 'products', 'management'],
+          searchKeywords: ['account', 'cuenta', 'balance', 'saldo', 'products', 'management'],
+          functionalPattern: 'Service Domain',
+          popularity: 0
+        }
+      );
+    }
+
+    // If no specific matches or need more suggestions, add generic but relevant ones
+    if (suggestions.length < 2) {
+      suggestions.push(
+        {
+          _id: 'enhanced-generic-1',
+          name: isSpanish ? 'Análisis de Riesgo Crediticio' : 'Credit Risk Analysis',
+          serviceDomain: 'Risk Assessment',
+          description: isSpanish 
+            ? 'API para evaluar y analizar riesgos crediticios de clientes y operaciones'
+            : 'API to evaluate and analyze credit risks for customers and operations',
+          complexity: 'high',
+          serviceOperations: [
+            {
+              name: isSpanish ? 'Evaluar Riesgo' : 'Assess Risk',
+              method: 'POST',
+              description: isSpanish ? 'Evaluar nivel de riesgo crediticio' : 'Assess credit risk level',
+              path: '/risk-assessment/credit'
+            }
+          ],
+          tags: ['risk', 'credit', 'analysis', 'assessment'],
+          searchKeywords: ['risk', 'riesgo', 'credit', 'credito', 'analysis', 'assessment'],
+          functionalPattern: 'Service Domain',
           popularity: 0
         }
       );
     }
     
-    return suggestions.slice(0, 4); // Limit to 4 suggestions
+    return suggestions.slice(0, 4);
   }
 
   /**

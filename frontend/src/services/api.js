@@ -146,6 +146,9 @@ export const bianService = {
     });
     return api.get(`/bian/search?${params}`);
   },
+  intelligentSearch: (data) => {
+    return api.post('/bian/intelligent-search', data);
+  },
   getPopularAPIs: (limit = 6) => {
     return api.get(`/bian/popular?limit=${limit}`);
   },

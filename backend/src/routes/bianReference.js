@@ -8,7 +8,7 @@ const router = express.Router();
  * @swagger
  * /api/bian/search:
  *   get:
- *     summary: Search BIAN reference APIs
+ *     summary: Search BIAN reference APIs with AI-powered natural language understanding
  *     tags: [BIAN Reference]
  *     security:
  *       - BearerAuth: []
@@ -17,7 +17,7 @@ const router = express.Router();
  *         name: q
  *         schema:
  *           type: string
- *         description: Search query (keywords)
+ *         description: Search query in natural language (e.g., "customer profile management", "payment processing")
  *       - in: query
  *         name: serviceDomain
  *         schema:
@@ -48,10 +48,10 @@ const router = express.Router();
  *           type: string
  *           enum: [en, es]
  *           default: en
- *         description: Language for descriptions
+ *         description: Language for descriptions and AI interpretation
  *     responses:
  *       200:
- *         description: Search results
+ *         description: Search results with AI interpretation
  *         content:
  *           application/json:
  *             schema:
@@ -65,6 +65,22 @@ const router = express.Router();
  *                     type: object
  *                 count:
  *                   type: integer
+ *                 source:
+ *                   type: string
+ *                   enum: [ai-intelligent, database, examples, fallback-enhanced]
+ *                 interpretation:
+ *                   type: object
+ *                   properties:
+ *                     query:
+ *                       type: string
+ *                     intent:
+ *                       type: string
+ *                     domain:
+ *                       type: string
+ *                     keywords:
+ *                       type: array
+ *                       items:
+ *                         type: string
  */
 router.get('/search', verifyToken, async (req, res) => {
   try {
@@ -89,6 +105,105 @@ router.get('/search', verifyToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Search failed'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/bian/intelligent-search:
+ *   post:
+ *     summary: Advanced AI-powered search with natural language understanding
+ *     tags: [BIAN Reference]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [query]
+ *             properties:
+ *               query:
+ *                 type: string
+ *                 description: Natural language search query
+ *                 example: "I need APIs for managing customer profiles and their transaction history"
+ *               serviceDomain:
+ *                 type: string
+ *                 description: Preferred BIAN service domain
+ *               complexity:
+ *                 type: string
+ *                 enum: [low, medium, high]
+ *                 description: Preferred complexity level
+ *               language:
+ *                 type: string
+ *                 enum: [en, es]
+ *                 default: en
+ *               context:
+ *                 type: object
+ *                 description: Additional context for better understanding
+ *                 properties:
+ *                   businessRequirements:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   technicalConstraints:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   integrationNeeds:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *     responses:
+ *       200:
+ *         description: Intelligent search results with detailed interpretation
+ *       400:
+ *         description: Invalid request parameters
+ */
+router.post('/intelligent-search', verifyToken, async (req, res) => {
+  try {
+    const { query, serviceDomain, complexity, language = 'en', context = {} } = req.body;
+
+    if (!query || query.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Search query is required'
+      });
+    }
+
+    const result = await bianReferenceService.generateIntelligentBIANSuggestions(query, {
+      serviceDomain,
+      complexity,
+      language,
+      limit: 8,
+      context
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json({
+      success: true,
+      results: result.suggestions,
+      count: result.suggestions.length,
+      source: 'ai-intelligent',
+      interpretation: result.interpretation,
+      metadata: {
+        processingTime: new Date().toISOString(),
+        model: 'gpt-4o-mini',
+        contextUsed: Object.keys(context).length > 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Intelligent search error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Intelligent search failed',
+      details: error.message
     });
   }
 });
