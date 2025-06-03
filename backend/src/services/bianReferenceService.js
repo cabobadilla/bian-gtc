@@ -126,7 +126,9 @@ Respond in JSON format with an array of suggested APIs. Maximum 6 suggestions.`;
 
       const userPrompt = `Generate BIAN API suggestions for: "${searchQuery}"
 
-Return JSON format:
+IMPORTANT: Return ONLY valid JSON without any markdown formatting or code blocks.
+
+JSON format:
 {
   "suggestions": [
     {
@@ -164,8 +166,30 @@ Return JSON format:
         console.log('🤖 [AI SUGGESTIONS] Raw response:', responseText);
       }
 
+      // Clean the response to remove markdown formatting and extract JSON
+      let cleanedResponse = responseText;
+      
+      // Remove markdown code blocks
+      cleanedResponse = cleanedResponse.replace(/```json\s*/g, '');
+      cleanedResponse = cleanedResponse.replace(/```\s*/g, '');
+      
+      // Remove any leading/trailing whitespace
+      cleanedResponse = cleanedResponse.trim();
+      
+      // Find JSON object boundaries if there's extra text
+      const jsonStart = cleanedResponse.indexOf('{');
+      const jsonEnd = cleanedResponse.lastIndexOf('}');
+      
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        cleanedResponse = cleanedResponse.substring(jsonStart, jsonEnd + 1);
+      }
+
+      if (isDebug) {
+        console.log('🧹 [AI SUGGESTIONS] Cleaned response:', cleanedResponse);
+      }
+
       // Parse JSON response
-      const parsedResponse = JSON.parse(responseText);
+      const parsedResponse = JSON.parse(cleanedResponse);
       
       if (isDebug) {
         console.log('✅ [AI SUGGESTIONS] Generated suggestions:', {
@@ -181,12 +205,142 @@ Return JSON format:
 
     } catch (error) {
       console.error('AI suggestions error:', error);
+      
+      if (isDebug) {
+        console.log('💥 [AI SUGGESTIONS] Error details:', {
+          errorType: error.constructor.name,
+          message: error.message,
+          searchQuery
+        });
+      }
+
+      // If JSON parsing fails, return fallback suggestions
+      if (error instanceof SyntaxError) {
+        console.log('🔄 [AI SUGGESTIONS] JSON parsing failed, using fallback suggestions');
+        
+        const fallbackSuggestions = this.generateFallbackSuggestions(searchQuery, language);
+        
+        return {
+          success: true,
+          suggestions: fallbackSuggestions,
+          source: 'fallback',
+          note: 'AI service unavailable, showing fallback suggestions'
+        };
+      }
+      
       return {
         success: false,
         error: 'Failed to generate AI suggestions',
         details: error.message
       };
     }
+  }
+
+  /**
+   * Generate fallback suggestions when AI fails
+   */
+  generateFallbackSuggestions(searchQuery, language = 'en') {
+    const isSpanish = language === 'es';
+    
+    // Create contextual suggestions based on search query
+    const suggestions = [];
+    const query = searchQuery.toLowerCase();
+    
+    if (query.includes('pago') || query.includes('payment')) {
+      suggestions.push({
+        _id: 'fallback-payment-1',
+        name: isSpanish ? 'Gestión de Órdenes de Pago' : 'Payment Order Management',
+        serviceDomain: 'Payment Processing',
+        description: isSpanish 
+          ? 'API para gestionar órdenes de pago y transferencias bancarias'
+          : 'API to manage payment orders and bank transfers',
+        complexity: 'high',
+        serviceOperations: [
+          {
+            name: isSpanish ? 'Iniciar Pago' : 'Initiate Payment',
+            method: 'POST',
+            description: isSpanish ? 'Iniciar una nueva orden de pago' : 'Start a new payment order'
+          },
+          {
+            name: isSpanish ? 'Consultar Estado' : 'Check Status',
+            method: 'GET',
+            description: isSpanish ? 'Verificar el estado del pago' : 'Check payment status'
+          }
+        ],
+        tags: ['payment', 'transfer', 'banking'],
+        popularity: 0
+      });
+    }
+    
+    if (query.includes('cliente') || query.includes('customer')) {
+      suggestions.push({
+        _id: 'fallback-customer-1',
+        name: isSpanish ? 'Gestión de Información del Cliente' : 'Customer Information Management',
+        serviceDomain: 'Customer Management',
+        description: isSpanish 
+          ? 'API para gestionar perfiles e información de clientes'
+          : 'API to manage customer profiles and information',
+        complexity: 'medium',
+        serviceOperations: [
+          {
+            name: isSpanish ? 'Obtener Cliente' : 'Get Customer',
+            method: 'GET',
+            description: isSpanish ? 'Obtener información del cliente' : 'Retrieve customer information'
+          },
+          {
+            name: isSpanish ? 'Actualizar Cliente' : 'Update Customer',
+            method: 'PUT',
+            description: isSpanish ? 'Actualizar datos del cliente' : 'Update customer data'
+          }
+        ],
+        tags: ['customer', 'profile', 'management'],
+        popularity: 0
+      });
+    }
+    
+    // If no specific matches, add generic banking APIs
+    if (suggestions.length === 0) {
+      suggestions.push(
+        {
+          _id: 'fallback-generic-1',
+          name: isSpanish ? 'Gestión de Cuentas' : 'Account Management',
+          serviceDomain: 'Account Management',
+          description: isSpanish 
+            ? 'API para gestionar cuentas bancarias y operaciones'
+            : 'API to manage bank accounts and operations',
+          complexity: 'medium',
+          serviceOperations: [
+            {
+              name: isSpanish ? 'Consultar Saldo' : 'Check Balance',
+              method: 'GET',
+              description: isSpanish ? 'Consultar saldo de cuenta' : 'Check account balance'
+            }
+          ],
+          tags: ['account', 'balance', 'banking'],
+          popularity: 0
+        },
+        {
+          _id: 'fallback-generic-2',
+          name: isSpanish ? 'Procesamiento de Transacciones' : 'Transaction Processing',
+          serviceDomain: 'Payment Processing',
+          description: isSpanish 
+            ? 'API para procesar transacciones financieras'
+            : 'API to process financial transactions',
+          complexity: 'high',
+          serviceOperations: [
+            {
+              name: isSpanish ? 'Procesar Transacción' : 'Process Transaction',
+              method: 'POST',
+              description: isSpanish ? 'Procesar una nueva transacción' : 'Process a new transaction'
+            }
+          ],
+          tags: ['transaction', 'processing', 'finance'],
+          popularity: 0
+        }
+      );
+    }
+    
+    return suggestions.slice(0, 4); // Limit to 4 suggestions
   }
 
   /**
