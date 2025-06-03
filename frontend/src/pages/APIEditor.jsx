@@ -70,7 +70,8 @@ const APIEditor = () => {
     onSuccess: (data) => {
       const api = data.data.api;
       
-      console.log('🔧 [API EDITOR] Loading API data:', {
+      console.log('🔧 [API EDITOR] Full API response received:', data);
+      console.log('🔧 [API EDITOR] API object structure:', {
         apiId: id,
         apiName: api.name,
         apiDescription: api.description,
@@ -78,7 +79,13 @@ const APIEditor = () => {
         apiVisibility: api.visibility,
         apiCategory: api.category,
         apiTags: api.tags,
-        currentVersionSpec: !!api.currentVersionSpec
+        currentVersion: api.currentVersion,
+        versionsLength: api.versions?.length,
+        currentVersionSpec: api.currentVersionSpec,
+        currentVersionSpecType: typeof api.currentVersionSpec,
+        currentVersionSpecKeys: api.currentVersionSpec ? Object.keys(api.currentVersionSpec) : null,
+        firstVersionOpenApiSpec: api.versions?.[0]?.openApiSpec,
+        allKeys: Object.keys(api)
       });
       
       setFormData({
@@ -90,14 +97,21 @@ const APIEditor = () => {
         tags: api.tags || []
       });
       
-      // Set OpenAPI spec
+      // Set OpenAPI spec - try multiple sources
+      let specToSet = '';
+      
       if (api.currentVersionSpec) {
-        setSpecData(JSON.stringify(api.currentVersionSpec, null, 2));
-        console.log('🔧 [API EDITOR] OpenAPI spec loaded, length:', JSON.stringify(api.currentVersionSpec, null, 2).length);
+        specToSet = JSON.stringify(api.currentVersionSpec, null, 2);
+        console.log('🔧 [API EDITOR] Using currentVersionSpec, length:', specToSet.length);
+      } else if (api.versions && api.versions.length > 0 && api.versions[0].openApiSpec) {
+        specToSet = JSON.stringify(api.versions[0].openApiSpec, null, 2);
+        console.log('🔧 [API EDITOR] Using first version openApiSpec, length:', specToSet.length);
       } else {
         console.log('❌ [API EDITOR] No OpenAPI spec found for this API');
-        setSpecData('');
+        specToSet = '';
       }
+      
+      setSpecData(specToSet);
     }
   });
 

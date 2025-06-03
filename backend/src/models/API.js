@@ -258,6 +258,10 @@ apiSchema.pre('save', function(next) {
   next();
 });
 
+// Ensure virtuals are included in JSON
+apiSchema.set('toJSON', { virtuals: true });
+apiSchema.set('toObject', { virtuals: true });
+
 const API = mongoose.model('API', apiSchema);
 
 module.exports = API; 
