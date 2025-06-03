@@ -89,8 +89,15 @@ const BIANDetail = () => {
       setLoadingExplanation(false);
     },
     onError: (error) => {
-      toast.error('Error generando explicación');
+      console.error('Explanation error:', error);
       setLoadingExplanation(false);
+      
+      // Handle AI-generated APIs specifically
+      if (error.response?.data?.isAIGenerated) {
+        toast.error(error.response.data.message || 'Las APIs generadas por IA ya incluyen explicaciones contextuales');
+      } else {
+        toast.error('Error generando explicación');
+      }
     }
   });
 
@@ -107,6 +114,12 @@ const BIANDetail = () => {
   });
 
   const handleGenerateExplanation = () => {
+    // Check if this is an AI-generated API
+    if (id.startsWith('ai-generated-') || id.startsWith('fallback-') || id.startsWith('example-')) {
+      toast.info('Las APIs generadas por IA ya incluyen explicaciones contextuales en su descripción');
+      return;
+    }
+
     setLoadingExplanation(true);
     generateExplanationMutation.mutate({ 
       apiId: id, 
@@ -131,6 +144,9 @@ const BIANDetail = () => {
       default: return 'default';
     }
   };
+
+  // Check if this is an AI-generated API
+  const isAIGenerated = id.startsWith('ai-generated-') || id.startsWith('fallback-') || id.startsWith('example-');
 
   if (isLoading) {
     return (
@@ -345,40 +361,83 @@ const BIANDetail = () => {
       {tabValue === 2 && (
         <Card>
           <CardContent>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-              <Typography variant="h6">
-                Explicación con Inteligencia Artificial
-              </Typography>
-              <Button
-                variant="outlined"
-                startIcon={<LightbulbIcon />}
-                onClick={handleGenerateExplanation}
-                disabled={loadingExplanation}
-              >
-                {loadingExplanation ? 'Generando...' : 'Generar Explicación'}
-              </Button>
-            </Box>
-            
-            {loadingExplanation && (
-              <Box textAlign="center" py={4}>
-                <CircularProgress />
-                <Typography variant="body2" sx={{ mt: 2 }}>
-                  Generando explicación personalizada...
+            {isAIGenerated ? (
+              <>
+                <Typography variant="h6" gutterBottom>
+                  API Generada por Inteligencia Artificial
                 </Typography>
-              </Box>
-            )}
-            
-            {aiExplanation ? (
-              <Paper sx={{ p: 3, bgcolor: 'grey.50' }}>
-                <Typography variant="body1" style={{ whiteSpace: 'pre-line' }}>
-                  {aiExplanation}
-                </Typography>
-              </Paper>
-            ) : !loadingExplanation && (
-              <Alert severity="info">
-                Haz clic en "Generar Explicación" para obtener una explicación detallada 
-                de esta API generada por inteligencia artificial.
-              </Alert>
+                <Alert severity="info" sx={{ mb: 3 }}>
+                  Esta API fue generada automáticamente por nuestro sistema de IA basado en tu búsqueda. 
+                  La descripción ya incluye explicaciones contextuales y ejemplos de uso.
+                </Alert>
+                <Paper sx={{ p: 3, bgcolor: 'grey.50' }}>
+                  <Typography variant="body1" paragraph>
+                    <strong>Descripción Contextual:</strong>
+                  </Typography>
+                  <Typography variant="body1" style={{ whiteSpace: 'pre-line' }}>
+                    {api.description}
+                  </Typography>
+                  
+                  {api.serviceOperations && api.serviceOperations.length > 0 && (
+                    <>
+                      <Typography variant="body1" paragraph sx={{ mt: 3 }}>
+                        <strong>Operaciones Principales:</strong>
+                      </Typography>
+                      {api.serviceOperations.map((operation, index) => (
+                        <Typography key={index} variant="body2" sx={{ ml: 2, mb: 1 }}>
+                          • <strong>{operation.method} {operation.name}</strong>: {operation.description}
+                        </Typography>
+                      ))}
+                    </>
+                  )}
+                  
+                  <Typography variant="body1" paragraph sx={{ mt: 3 }}>
+                    <strong>Recomendación:</strong>
+                  </Typography>
+                  <Typography variant="body2">
+                    Para obtener una API completamente funcional y personalizada, utiliza el botón 
+                    "Crear API" para generar una implementación específica para tu empresa.
+                  </Typography>
+                </Paper>
+              </>
+            ) : (
+              <>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                  <Typography variant="h6">
+                    Explicación con Inteligencia Artificial
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    startIcon={<LightbulbIcon />}
+                    onClick={handleGenerateExplanation}
+                    disabled={loadingExplanation}
+                  >
+                    {loadingExplanation ? 'Generando...' : 'Generar Explicación'}
+                  </Button>
+                </Box>
+                
+                {loadingExplanation && (
+                  <Box textAlign="center" py={4}>
+                    <CircularProgress />
+                    <Typography variant="body2" sx={{ mt: 2 }}>
+                      Generando explicación personalizada...
+                    </Typography>
+                  </Box>
+                )}
+                
+                {aiExplanation ? (
+                  <Paper sx={{ p: 3, bgcolor: 'grey.50' }}>
+                    <Typography variant="body1" style={{ whiteSpace: 'pre-line' }}>
+                      {aiExplanation}
+                    </Typography>
+                  </Paper>
+                ) : !loadingExplanation && (
+                  <Alert severity="info">
+                    Haz clic en "Generar Explicación" para obtener una explicación detallada 
+                    de esta API generada por inteligencia artificial.
+                  </Alert>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

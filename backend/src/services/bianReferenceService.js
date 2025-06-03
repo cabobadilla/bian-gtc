@@ -374,6 +374,26 @@ JSON format:
     try {
       const { language = 'en', includeAIExplanation = false } = options;
 
+      if (isDebug) {
+        console.log('🔍 [API DETAILS] Getting details for:', {
+          apiId,
+          options
+        });
+      }
+
+      // Check if this is an AI-generated API (not in database)
+      if (apiId.startsWith('ai-generated-') || apiId.startsWith('fallback-') || apiId.startsWith('example-')) {
+        if (isDebug) {
+          console.log('🤖 [API DETAILS] This is an AI-generated API, not in database');
+        }
+        
+        return {
+          success: false,
+          error: 'AI-generated APIs are not stored in database and cannot be retrieved for detailed explanation',
+          isAIGenerated: true
+        };
+      }
+
       const api = await BIANReferenceAPI.findById(apiId);
       if (!api) {
         return {

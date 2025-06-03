@@ -250,6 +250,16 @@ router.post('/:id/explain', verifyToken, async (req, res) => {
     const { id } = req.params;
     const { language = 'en' } = req.body;
 
+    // Check if this is an AI-generated API
+    if (id.startsWith('ai-generated-') || id.startsWith('fallback-') || id.startsWith('example-')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot generate explanations for AI-generated APIs',
+        message: 'Las APIs generadas por IA ya incluyen explicaciones contextuales. Para obtener más detalles, considera crear una API personalizada basada en esta referencia.',
+        isAIGenerated: true
+      });
+    }
+
     const apiResult = await bianReferenceService.getAPIDetails(id);
     if (!apiResult.success) {
       return res.status(404).json(apiResult);
