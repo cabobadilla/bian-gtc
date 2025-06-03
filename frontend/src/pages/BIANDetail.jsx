@@ -133,7 +133,21 @@ const BIANDetail = () => {
       return;
     }
 
-    createAPIMutation.mutate(createForm);
+    // For AI-generated APIs, we need to pass the complete API data
+    const requestData = {
+      companyId: createForm.companyId,
+      name: createForm.name,
+      description: createForm.description
+    };
+
+    // If this is an AI-generated API, include the complete API data
+    if (isAIGenerated) {
+      requestData.customizations = {
+        apiData: api // Pass the complete API object
+      };
+    }
+
+    createAPIMutation.mutate(requestData);
   };
 
   const getComplexityColor = (complexity) => {

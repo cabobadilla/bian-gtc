@@ -330,6 +330,7 @@ router.post('/:id/create-api', verifyToken, async (req, res) => {
       });
     }
 
+    // Merge customizations properly
     const customizationData = {
       name,
       description,

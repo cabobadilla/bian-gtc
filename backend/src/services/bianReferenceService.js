@@ -643,6 +643,76 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
    */
   async createUserAPIFromReference(referenceId, customizations, userId, companyId) {
     try {
+      if (isDebug) {
+        console.log('🔧 [CREATE API] Starting creation:', {
+          referenceId,
+          customizations,
+          userId,
+          companyId
+        });
+      }
+
+      // Check if this is an AI-generated API (not in database)
+      if (referenceId.startsWith('ai-generated-') || referenceId.startsWith('fallback-') || referenceId.startsWith('example-')) {
+        if (isDebug) {
+          console.log('🤖 [CREATE API] This is an AI-generated API, creating from provided data');
+        }
+        
+        // For AI-generated APIs, we need the API data to be provided in customizations
+        if (!customizations.apiData) {
+          return {
+            success: false,
+            error: 'AI-generated APIs require the original API data to create user APIs',
+            details: 'The frontend must provide the complete API data in customizations.apiData'
+          };
+        }
+
+        const apiData = customizations.apiData;
+        
+        // Create the API using existing API service
+        const API = require('../models/API');
+        
+        const newAPI = new API({
+          name: customizations.name || `${apiData.name}_Custom`,
+          description: customizations.description || apiData.description,
+          company: companyId,
+          createdBy: userId,
+          category: this.mapServiceDomainToCategory(apiData.serviceDomain),
+          bianDomains: [{
+            domain: apiData.serviceDomain,
+            serviceOperations: apiData.serviceOperations?.map(op => op.name) || []
+          }],
+          tags: apiData.tags || [],
+          baseReference: {
+            type: 'bian-ai-generated',
+            referenceId: referenceId,
+            referenceName: apiData.name,
+            source: 'ai-generated'
+          }
+        });
+
+        // Create a basic OpenAPI spec from the AI-generated data
+        const openApiSpec = this.createOpenAPISpecFromAIData(apiData, customizations);
+        newAPI.versions[0].openApiSpec = openApiSpec;
+
+        await newAPI.save();
+
+        if (isDebug) {
+          console.log('✅ [CREATE API] AI-generated API created successfully:', {
+            apiId: newAPI._id,
+            name: newAPI.name
+          });
+        }
+
+        return {
+          success: true,
+          api: newAPI,
+          referenceUsed: apiData.name,
+          source: 'ai-generated'
+        };
+      }
+
+      // For database APIs, proceed with normal flow
       const referenceAPI = await BIANReferenceAPI.findById(referenceId);
       if (!referenceAPI) {
         return {
@@ -689,10 +759,18 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
       await newAPI.save();
       await referenceAPI.incrementPopularity();
 
+      if (isDebug) {
+        console.log('✅ [CREATE API] Database API created successfully:', {
+          apiId: newAPI._id,
+          name: newAPI.name
+        });
+      }
+
       return {
         success: true,
         api: newAPI,
-        referenceUsed: referenceAPI.name
+        referenceUsed: referenceAPI.name,
+        source: 'database'
       };
 
     } catch (error) {
@@ -703,6 +781,111 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
         details: error.message
       };
     }
+  }
+
+  /**
+   * Create OpenAPI spec from AI-generated data
+   */
+  createOpenAPISpecFromAIData(apiData, customizations) {
+    const spec = {
+      openapi: "3.0.0",
+      info: {
+        title: customizations.name || apiData.name,
+        description: customizations.description || apiData.description,
+        version: "1.0.0"
+      },
+      servers: [
+        {
+          url: "https://api.example.com/v1",
+          description: "Production server"
+        }
+      ],
+      paths: {},
+      components: {
+        schemas: {},
+        securitySchemes: {
+          BearerAuth: {
+            type: "http",
+            scheme: "bearer",
+            bearerFormat: "JWT"
+          }
+        }
+      },
+      security: [
+        {
+          BearerAuth: []
+        }
+      ]
+    };
+
+    // Add paths from service operations
+    if (apiData.serviceOperations && apiData.serviceOperations.length > 0) {
+      apiData.serviceOperations.forEach(operation => {
+        const path = `/${operation.name.toLowerCase().replace(/\s+/g, '-')}`;
+        const method = operation.method.toLowerCase();
+        
+        if (!spec.paths[path]) {
+          spec.paths[path] = {};
+        }
+        
+        spec.paths[path][method] = {
+          summary: operation.name,
+          description: operation.description,
+          responses: {
+            "200": {
+              description: "Successful response",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: {
+                        type: "boolean",
+                        example: true
+                      },
+                      data: {
+                        type: "object"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              description: "Bad request"
+            },
+            "401": {
+              description: "Unauthorized"
+            },
+            "500": {
+              description: "Internal server error"
+            }
+          }
+        };
+
+        // Add request body for POST/PUT methods
+        if (['post', 'put', 'patch'].includes(method)) {
+          spec.paths[path][method].requestBody = {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    data: {
+                      type: "object",
+                      description: "Request data"
+                    }
+                  }
+                }
+              }
+            }
+          };
+        }
+      });
+    }
+
+    return spec;
   }
 
   /**
