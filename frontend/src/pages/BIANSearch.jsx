@@ -33,13 +33,11 @@ import {
 import { useQuery, useMutation } from 'react-query'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { useCompanyStore } from '../store/companyStore'
 
 import { bianService, companyService } from '../services/api'
 
 const BIANSearch = () => {
   const navigate = useNavigate()
-  const { companies } = useCompanyStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [filters, setFilters] = useState({
     serviceDomain: '',
@@ -53,6 +51,9 @@ const BIANSearch = () => {
     'my-companies',
     companyService.getMyCompanies
   )
+
+  const companies = companiesData?.data?.companies || []
+  const hasCompanies = companies.length > 0
 
   // Get service domains for filter
   const { data: domainsData } = useQuery(
@@ -85,8 +86,6 @@ const BIANSearch = () => {
       keepPreviousData: true
     }
   )
-
-  const hasCompanies = companies.length > 0
 
   const handleSearch = () => {
     if (!hasCompanies) {

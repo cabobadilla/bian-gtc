@@ -44,15 +44,13 @@ import {
   Lightbulb as LightbulbIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation } from 'react-query';
-import { bianService } from '../services/api';
-import { useCompanyStore } from '../store/companyStore';
+import { bianService, companyService } from '../services/api';
 import toast from 'react-hot-toast';
 
 const BIANDetail = () => {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { companies } = useCompanyStore();
   
   const [tabValue, setTabValue] = useState(0);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -63,6 +61,14 @@ const BIANDetail = () => {
     name: '',
     description: ''
   });
+
+  // Get user's companies
+  const { data: companiesData } = useQuery(
+    'my-companies',
+    companyService.getMyCompanies
+  );
+
+  const companies = companiesData?.data?.companies || [];
 
   // Get API details from location state or fetch from server
   const apiFromState = location.state?.api;
