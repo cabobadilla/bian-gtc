@@ -43,7 +43,7 @@ import {
   Add as AddIcon,
   Lightbulb as LightbulbIcon
 } from '@mui/icons-material';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation } from 'react-query';
 import { bianService } from '../services/api';
 import { useCompanyStore } from '../store/companyStore';
 import toast from 'react-hot-toast';
