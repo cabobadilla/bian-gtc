@@ -47,8 +47,35 @@ router.post('/', verifyToken, async (req, res) => {
       });
     }
 
+    // Generate slug manually to avoid validation issues
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    if (isDebug) {
+      console.log('🏷️ [CREATE COMPANY] Generated slug:', {
+        originalName: name,
+        generatedSlug: slug
+      });
+    }
+
+    // Check if slug already exists
+    const existingCompany = await Company.findOne({ slug });
+    let finalSlug = slug;
+    
+    if (existingCompany) {
+      // Add timestamp to make it unique
+      finalSlug = `${slug}-${Date.now()}`;
+      if (isDebug) {
+        console.log('⚠️ [CREATE COMPANY] Slug exists, using unique slug:', finalSlug);
+      }
+    }
+
     const company = new Company({
       name,
+      slug: finalSlug,
       description,
       industry,
       size,
@@ -107,11 +134,42 @@ router.post('/', verifyToken, async (req, res) => {
         message: error.message,
         stack: error.stack,
         name: error.name,
-        code: error.code
+        code: error.code,
+        errors: error.errors
       });
     }
     
     console.error('Create company error:', error);
+    
+    // Handle specific validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.keys(error.errors).map(key => ({
+        field: key,
+        message: error.errors[key].message,
+        value: error.errors[key].value
+      }));
+      
+      if (isDebug) {
+        console.error('📋 [CREATE COMPANY] Validation errors:', validationErrors);
+      }
+      
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: validationErrors,
+        ...(isDebug && { fullError: error.message })
+      });
+    }
+    
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Company with this name already exists',
+        ...(isDebug && { details: error.message })
+      });
+    }
+    
     res.status(500).json({
       success: false,
       error: 'Failed to create company',
