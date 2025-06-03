@@ -155,8 +155,15 @@ const APIs = () => {
   };
 
   const handleMenuClose = () => {
+    console.log('🔧 [FRONTEND] handleMenuClose called, deleteDialogOpen:', deleteDialogOpen);
     setAnchorEl(null);
-    setSelectedAPI(null);
+    // Only reset selectedAPI if we're not opening the delete dialog
+    if (!deleteDialogOpen) {
+      console.log('🔧 [FRONTEND] Resetting selectedAPI to null');
+      setSelectedAPI(null);
+    } else {
+      console.log('🔧 [FRONTEND] Keeping selectedAPI because delete dialog is open');
+    }
   };
 
   const handleViewAPI = (api) => {
@@ -173,7 +180,8 @@ const APIs = () => {
     console.log('🔧 [FRONTEND] handleDeleteAPI called with:', api);
     setSelectedAPI(api);
     setDeleteDialogOpen(true);
-    handleMenuClose();
+    // Don't call handleMenuClose here, just close the menu
+    setAnchorEl(null);
   };
 
   const confirmDeleteAPI = () => {
@@ -451,6 +459,7 @@ const APIs = () => {
         onClose={() => {
           console.log('🔧 [FRONTEND] Delete dialog closed');
           setDeleteDialogOpen(false);
+          setSelectedAPI(null);
         }}
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
@@ -469,6 +478,7 @@ const APIs = () => {
             onClick={() => {
               console.log('🔧 [FRONTEND] Cancelar button clicked');
               setDeleteDialogOpen(false);
+              setSelectedAPI(null);
             }}
             disabled={deleteAPIMutation.isLoading}
           >
