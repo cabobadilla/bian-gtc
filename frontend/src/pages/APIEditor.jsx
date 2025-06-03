@@ -314,6 +314,30 @@ const APIEditor = () => {
     setIntegrationDialogOpen(true);
   };
 
+  // Check if an endpoint already has a schema for the selected usage
+  const getEndpointSchemaInfo = () => {
+    const { path, method, usage, statusCode } = integrationSettings;
+    
+    if (!path || !method || !specData) return null;
+    
+    try {
+      const spec = JSON.parse(specData);
+      const endpoint = spec.paths?.[path]?.[method.toLowerCase()];
+      
+      if (!endpoint) return null;
+      
+      if (usage === 'request') {
+        const hasExisting = endpoint.requestBody?.content?.['application/json']?.schema;
+        return hasExisting ? 'request' : null;
+      } else {
+        const hasExisting = endpoint.responses?.[statusCode]?.content?.['application/json']?.schema;
+        return hasExisting ? 'response' : null;
+      }
+    } catch (error) {
+      return null;
+    }
+  };
+
   const handleIntegrateSchema = () => {
     const { path, method, usage, statusCode } = integrationSettings;
     
@@ -341,30 +365,162 @@ const APIEditor = () => {
       const endpoint = spec.paths[path][method.toLowerCase()];
       
       if (usage === 'request') {
-        // Add schema to request body
-        endpoint.requestBody = {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                '$ref': `#/components/schemas/${selectedSchemaForIntegration}`
+        // Handle request body - check if there's already a schema
+        if (endpoint.requestBody && 
+            endpoint.requestBody.content && 
+            endpoint.requestBody.content['application/json'] && 
+            endpoint.requestBody.content['application/json'].schema) {
+          
+          const existingSchema = endpoint.requestBody.content['application/json'].schema;
+          
+          // If there's already a schema reference, create a composite schema
+          if (existingSchema.$ref) {
+            // Create a composite schema that includes both
+            const compositeSchemaName = `${path.replace(/[^a-zA-Z0-9]/g, '')}_${method}_Request`;
+            
+            // Add composite schema to components
+            if (!spec.components.schemas[compositeSchemaName]) {
+              spec.components.schemas[compositeSchemaName] = {
+                type: 'object',
+                properties: {
+                  data: {
+                    allOf: [
+                      existingSchema,
+                      { $ref: `#/components/schemas/${selectedSchemaForIntegration}` }
+                    ]
+                  }
+                }
+              };
+            } else {
+              // Add to existing composite schema
+              if (!spec.components.schemas[compositeSchemaName].properties.data.allOf.find(
+                schema => schema.$ref === `#/components/schemas/${selectedSchemaForIntegration}`
+              )) {
+                spec.components.schemas[compositeSchemaName].properties.data.allOf.push({
+                  $ref: `#/components/schemas/${selectedSchemaForIntegration}`
+                });
               }
             }
+            
+            // Update the request body to use the composite schema
+            endpoint.requestBody.content['application/json'].schema = {
+              $ref: `#/components/schemas/${compositeSchemaName}`
+            };
+          } else {
+            // Create a wrapper schema
+            endpoint.requestBody.content['application/json'].schema = {
+              type: 'object',
+              properties: {
+                data: {
+                  allOf: [
+                    existingSchema,
+                    { $ref: `#/components/schemas/${selectedSchemaForIntegration}` }
+                  ]
+                }
+              }
+            };
           }
-        };
+        } else {
+          // No existing schema, add the new one
+          endpoint.requestBody = {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: `#/components/schemas/${selectedSchemaForIntegration}`
+                }
+              }
+            }
+          };
+        }
       } else {
-        // Add schema to response
+        // Handle response - check if there's already a schema
         if (!endpoint.responses) endpoint.responses = {};
-        endpoint.responses[statusCode] = {
-          description: statusCode === '200' ? 'Successful response' : 'Response',
-          content: {
-            'application/json': {
-              schema: {
-                '$ref': `#/components/schemas/${selectedSchemaForIntegration}`
+        
+        if (endpoint.responses[statusCode] && 
+            endpoint.responses[statusCode].content && 
+            endpoint.responses[statusCode].content['application/json'] && 
+            endpoint.responses[statusCode].content['application/json'].schema) {
+          
+          const existingSchema = endpoint.responses[statusCode].content['application/json'].schema;
+          
+          // If there's already a schema reference, create a composite schema
+          if (existingSchema.$ref) {
+            // Create a composite schema that includes both
+            const compositeSchemaName = `${path.replace(/[^a-zA-Z0-9]/g, '')}_${method}_Response${statusCode}`;
+            
+            // Add composite schema to components
+            if (!spec.components.schemas[compositeSchemaName]) {
+              spec.components.schemas[compositeSchemaName] = {
+                type: 'object',
+                properties: {
+                  success: {
+                    type: 'boolean',
+                    description: 'Indicates if the request was successful'
+                  },
+                  data: {
+                    allOf: [
+                      existingSchema,
+                      { $ref: `#/components/schemas/${selectedSchemaForIntegration}` }
+                    ]
+                  }
+                }
+              };
+            } else {
+              // Add to existing composite schema
+              if (!spec.components.schemas[compositeSchemaName].properties.data.allOf.find(
+                schema => schema.$ref === `#/components/schemas/${selectedSchemaForIntegration}`
+              )) {
+                spec.components.schemas[compositeSchemaName].properties.data.allOf.push({
+                  $ref: `#/components/schemas/${selectedSchemaForIntegration}`
+                });
               }
             }
+            
+            // Update the response to use the composite schema
+            endpoint.responses[statusCode].content['application/json'].schema = {
+              $ref: `#/components/schemas/${compositeSchemaName}`
+            };
+          } else {
+            // Create a wrapper schema
+            endpoint.responses[statusCode].content['application/json'].schema = {
+              type: 'object',
+              properties: {
+                success: {
+                  type: 'boolean',
+                  description: 'Indicates if the request was successful'
+                },
+                data: {
+                  allOf: [
+                    existingSchema,
+                    { $ref: `#/components/schemas/${selectedSchemaForIntegration}` }
+                  ]
+                }
+              }
+            };
           }
-        };
+        } else {
+          // No existing schema, add the new one wrapped in a response structure
+          endpoint.responses[statusCode] = {
+            description: statusCode === '200' ? 'Successful response' : 'Response',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: {
+                      type: 'boolean',
+                      description: 'Indicates if the request was successful'
+                    },
+                    data: {
+                      $ref: `#/components/schemas/${selectedSchemaForIntegration}`
+                    }
+                  }
+                }
+              }
+            }
+          };
+        }
       }
 
       const updatedSpecData = JSON.stringify(spec, null, 2);
@@ -1153,10 +1309,18 @@ const APIEditor = () => {
             
             <Grid item xs={12}>
               <Alert severity="info">
-                {integrationSettings.usage === 'request' 
-                  ? `El schema ${selectedSchemaForIntegration} se usará para validar los datos que envían los clientes en las peticiones.`
-                  : `El schema ${selectedSchemaForIntegration} definirá la estructura de los datos que devuelve tu API.`
-                }
+                {(() => {
+                  const existingSchemaInfo = getEndpointSchemaInfo();
+                  const baseMessage = integrationSettings.usage === 'request' 
+                    ? `El schema ${selectedSchemaForIntegration} se usará para validar los datos que envían los clientes en las peticiones.`
+                    : `El schema ${selectedSchemaForIntegration} definirá la estructura de los datos que devuelve tu API.`;
+                  
+                  if (existingSchemaInfo) {
+                    return `${baseMessage}\n\n⚠️ NOTA: Este endpoint ya tiene un schema. Se combinarán ambos schemas en una estructura wrapper con una propiedad "data".`;
+                  }
+                  
+                  return baseMessage;
+                })()}
               </Alert>
             </Grid>
           </Grid>
