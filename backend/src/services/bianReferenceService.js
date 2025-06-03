@@ -7,7 +7,7 @@ class BIANReferenceService {
   
   /**
    * Search BIAN reference APIs by keyword and filters
-   * Now prioritizes AI-powered search for better natural language understanding
+   * Optimized version with faster responses and better error handling
    */
   async searchAPIs(searchQuery, options = {}) {
     try {
@@ -26,53 +26,107 @@ class BIANReferenceService {
         });
       }
 
-      // For empty queries, return popular/example APIs
+      // For empty queries, return popular/example APIs immediately
       if (!searchQuery || searchQuery.trim().length === 0) {
         const query = { isActive: true };
         if (serviceDomain) query.serviceDomain = serviceDomain;
         if (complexity) query.complexity = complexity;
 
         const sortOptions = sort === 'popularity' ? { popularity: -1 } : { createdAt: -1 };
-        const results = await BIANReferenceAPI.find(query)
-          .sort(sortOptions)
-          .limit(limit);
+        
+        try {
+          const results = await BIANReferenceAPI.find(query)
+            .sort(sortOptions)
+            .limit(limit)
+            .maxTimeMS(5000); // 5 second timeout for DB query
 
-        // If no database results, show popular examples
-        if (results.length === 0) {
-          const exampleAPIs = this.getPopularExampleAPIs(language);
-          return {
-            success: true,
-            results: exampleAPIs,
-            count: exampleAPIs.length,
-            source: 'examples'
-          };
+          if (results.length > 0) {
+            return {
+              success: true,
+              results: results.map(api => ({
+                ...api.toObject(),
+                localizedDescription: api.getEnrichedDescription(language)
+              })),
+              count: results.length,
+              source: 'database'
+            };
+          }
+        } catch (dbError) {
+          if (isDebug) {
+            console.log('⚠️ [BIAN SEARCH] Database query failed:', dbError.message);
+          }
         }
 
+        // Fallback to examples if DB fails
+        const exampleAPIs = this.getPopularExampleAPIs(language);
         return {
           success: true,
-          results: results.map(api => ({
-            ...api.toObject(),
-            localizedDescription: api.getEnrichedDescription(language)
-          })),
-          count: results.length,
-          source: 'database'
+          results: exampleAPIs,
+          count: exampleAPIs.length,
+          source: 'examples'
         };
       }
 
-      // Always try AI-powered search first for natural language understanding
+      // For short queries, try database first (faster than AI)
+      if (searchQuery.trim().length <= 15) {
+        if (isDebug) {
+          console.log('🔍 [BIAN SEARCH] Short query detected, trying database first');
+        }
+        
+        try {
+          const results = await BIANReferenceAPI.searchByKeyword(searchQuery, {
+            serviceDomain,
+            complexity,
+            limit,
+            sort
+          });
+
+          if (results.length > 0) {
+            if (isDebug) {
+              console.log('✅ [BIAN SEARCH] Database found results for short query');
+            }
+            
+            return {
+              success: true,
+              results: results.map(api => ({
+                ...api.toObject(),
+                localizedDescription: api.getEnrichedDescription(language)
+              })),
+              count: results.length,
+              source: 'database'
+            };
+          }
+        } catch (dbError) {
+          if (isDebug) {
+            console.log('⚠️ [BIAN SEARCH] Database search failed:', dbError.message);
+          }
+        }
+      }
+
+      // Try AI-powered search with timeout protection
       if (isDebug) {
-        console.log('🤖 [BIAN SEARCH] Using AI-powered search for natural language understanding');
+        console.log('🤖 [BIAN SEARCH] Trying AI-powered search with timeout protection');
       }
       
       try {
-        const aiResults = await this.generateIntelligentBIANSuggestions(searchQuery, {
-          serviceDomain,
-          complexity,
-          language,
-          limit
-        });
+        // Set a shorter timeout for AI requests
+        const aiResults = await Promise.race([
+          this.generateIntelligentBIANSuggestions(searchQuery, {
+            serviceDomain,
+            complexity,
+            language,
+            limit: Math.min(limit, 6) // Limit AI results to reduce response time
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('AI search timeout')), 15000) // 15 second timeout
+          )
+        ]);
         
         if (aiResults.success && aiResults.suggestions.length > 0) {
+          if (isDebug) {
+            console.log('✅ [BIAN SEARCH] AI search successful');
+          }
+          
           return {
             success: true,
             results: aiResults.suggestions,
@@ -83,37 +137,45 @@ class BIANReferenceService {
         }
       } catch (error) {
         if (isDebug) {
-          console.log('⚠️ [BIAN SEARCH] AI search failed, trying database fallback:', error.message);
+          console.log('⚠️ [BIAN SEARCH] AI search failed or timed out:', error.message);
         }
       }
 
       // Fallback to database search if AI fails
-      const results = await BIANReferenceAPI.searchByKeyword(searchQuery, {
-        serviceDomain,
-        complexity,
-        limit,
-        sort
-      });
-
       if (isDebug) {
-        console.log('📊 [BIAN SEARCH] Database fallback results:', {
-          count: results.length
+        console.log('🗄️ [BIAN SEARCH] Falling back to database search');
+      }
+      
+      try {
+        const results = await BIANReferenceAPI.searchByKeyword(searchQuery, {
+          serviceDomain,
+          complexity,
+          limit,
+          sort
         });
+
+        if (results.length > 0) {
+          return {
+            success: true,
+            results: results.map(api => ({
+              ...api.toObject(),
+              localizedDescription: api.getEnrichedDescription(language)
+            })),
+            count: results.length,
+            source: 'database-fallback'
+          };
+        }
+      } catch (dbError) {
+        if (isDebug) {
+          console.log('⚠️ [BIAN SEARCH] Database fallback also failed:', dbError.message);
+        }
       }
 
-      if (results.length > 0) {
-        return {
-          success: true,
-          results: results.map(api => ({
-            ...api.toObject(),
-            localizedDescription: api.getEnrichedDescription(language)
-          })),
-          count: results.length,
-          source: 'database-fallback'
-        };
+      // Final fallback to enhanced suggestions
+      if (isDebug) {
+        console.log('🎯 [BIAN SEARCH] Using enhanced fallback suggestions');
       }
-
-      // Final fallback to contextual suggestions
+      
       const fallbackSuggestions = this.generateEnhancedFallbackSuggestions(searchQuery, language);
       
       return {
@@ -121,21 +183,27 @@ class BIANReferenceService {
         results: fallbackSuggestions,
         count: fallbackSuggestions.length,
         source: 'fallback-enhanced',
-        note: 'Sugerencias contextuales basadas en tu búsqueda'
+        note: language === 'es' ? 'Sugerencias contextuales basadas en tu búsqueda' : 'Contextual suggestions based on your search'
       };
 
     } catch (error) {
-      console.error('Search BIAN APIs error:', error);
+      console.error('❌ [BIAN SEARCH] Critical error:', error);
+      
+      // Return basic examples as last resort
+      const exampleAPIs = this.getPopularExampleAPIs(options.language || 'en');
       return {
-        success: false,
-        error: 'Failed to search BIAN reference APIs',
-        details: error.message
+        success: true,
+        results: exampleAPIs,
+        count: exampleAPIs.length,
+        source: 'emergency-fallback',
+        note: 'Emergency fallback results'
       };
     }
   }
 
   /**
    * Generate intelligent BIAN API suggestions using enhanced ChatGPT prompts
+   * Optimized with better JSON parsing and error handling
    */
   async generateIntelligentBIANSuggestions(searchQuery, options = {}) {
     try {
@@ -146,128 +214,106 @@ class BIANReferenceService {
       }
 
       const systemPrompt = language === 'es' 
-        ? `Eres un experto en estándares BIAN (Banking Industry Architecture Network) v12 con profundo conocimiento de arquitectura bancaria moderna.
+        ? `Eres un experto en estándares BIAN (Banking Industry Architecture Network) v12. 
+Tu tarea es generar APIs BIAN precisas basadas en consultas de búsqueda.
 
-Tu tarea es interpretar consultas de búsqueda en lenguaje natural y generar APIs BIAN precisas y relevantes.
+IMPORTANTE: Responde SOLO con JSON válido. No incluyas explicaciones adicionales.
 
-CONOCIMIENTO BIAN ACTUALIZADO:
-- Dominios principales: Customer Management, Account Management, Payment Order, Transaction Processing, Credit Management, Risk Assessment, Compliance, Product Management, Market Operations
-- Patrones funcionales: Service Domain, Control Record, Operational Control, Analytical Control, Support Control
-- Operaciones estándar: Retrieve, Update, Create, Execute, Evaluate, Register, Initiate, Configure
-
-INSTRUCCIONES ESPECÍFICAS:
-1. Interpreta la intención real detrás de la consulta
-2. Identifica el dominio BIAN más relevante
-3. Genera APIs específicas y prácticas 
-4. Incluye operaciones completas y realistas
-5. Asegura compatibilidad con estándares bancarios
-6. Proporciona descripciones claras y detalladas
-
-Para cada API, incluye:
-- Nombre descriptivo y profesional
-- Dominio de servicio BIAN apropiado  
-- Descripción funcional clara
-- Operaciones principales con métodos HTTP correctos
-- Nivel de complejidad realista
-- Keywords relevantes para búsqueda
-- Casos de uso específicos
-
-Responde SOLO en formato JSON válido.`
-        : `You are a BIAN (Banking Industry Architecture Network) v12 expert with deep knowledge of modern banking architecture.
-
-Your task is to interpret natural language search queries and generate precise, relevant BIAN APIs.
-
-UPDATED BIAN KNOWLEDGE:
-- Main domains: Customer Management, Account Management, Payment Order, Transaction Processing, Credit Management, Risk Assessment, Compliance, Product Management, Market Operations
-- Functional patterns: Service Domain, Control Record, Operational Control, Analytical Control, Support Control
-- Standard operations: Retrieve, Update, Create, Execute, Evaluate, Register, Initiate, Configure
-
-SPECIFIC INSTRUCTIONS:
-1. Interpret the real intention behind the query
-2. Identify the most relevant BIAN domain
-3. Generate specific and practical APIs
-4. Include complete and realistic operations
-5. Ensure compatibility with banking standards
-6. Provide clear and detailed descriptions
-
-For each API, include:
-- Descriptive and professional name
-- Appropriate BIAN service domain
-- Clear functional description
-- Main operations with correct HTTP methods
-- Realistic complexity level
-- Relevant keywords for search
-- Specific use cases
-
-Respond ONLY in valid JSON format.`;
-
-      const contextualHints = this.generateContextualHints(searchQuery, serviceDomain, complexity, language);
-
-      const userPrompt = `Analiza esta consulta de búsqueda e interpreta la intención del usuario para generar APIs BIAN relevantes:
-
-CONSULTA: "${searchQuery}"
-${serviceDomain ? `DOMINIO PREFERIDO: ${serviceDomain}` : ''}
-${complexity ? `COMPLEJIDAD PREFERIDA: ${complexity}` : ''}
-
-CONTEXTO ADICIONAL:
-${contextualHints}
-
-IMPORTANTE: 
-- Interpreta la consulta en lenguaje natural
-- Si menciona "customer profile", piensa en gestión de clientes, perfiles, datos demográficos
-- Si menciona "payment", piensa en procesamiento de pagos, órdenes, transferencias
-- Si menciona "account", piensa en gestión de cuentas, saldos, operaciones
-- Genera máximo ${limit} APIs más relevantes
-
-Formato JSON requerido:
+Estructura JSON requerida:
 {
   "interpretation": {
     "query": "consulta original",
     "intent": "intención detectada",
-    "domain": "dominio BIAN principal identificado",
-    "keywords": ["palabras", "clave", "identificadas"]
+    "domain": "dominio BIAN principal",
+    "keywords": ["palabras", "clave"]
   },
   "suggestions": [
     {
       "_id": "ai-intelligent-1",
-      "name": "Nombre Descriptivo de la API",
+      "name": "Nombre API",
       "serviceDomain": "Dominio BIAN",
-      "description": "Descripción detallada de funcionalidad",
+      "description": "Descripción clara y concisa",
       "complexity": "low|medium|high",
       "serviceOperations": [
         {
-          "name": "Nombre Operación",
+          "name": "Operación",
           "method": "GET|POST|PUT|DELETE",
-          "description": "Descripción específica",
-          "path": "/endpoint/path"
+          "description": "Descripción breve",
+          "path": "/endpoint"
         }
       ],
-      "tags": ["etiquetas", "relevantes"],
-      "searchKeywords": ["palabras", "clave", "búsqueda"],
-      "useCases": [
+      "tags": ["etiquetas"],
+      "searchKeywords": ["palabras", "clave"],
+      "functionalPattern": "Service Domain",
+      "popularity": 0
+    }
+  ]
+}`
+        : `You are a BIAN (Banking Industry Architecture Network) v12 expert.
+Your task is to generate precise BIAN APIs based on search queries.
+
+IMPORTANT: Respond ONLY with valid JSON. Do not include additional explanations.
+
+Required JSON structure:
+{
+  "interpretation": {
+    "query": "original query",
+    "intent": "detected intent",
+    "domain": "main BIAN domain",
+    "keywords": ["key", "words"]
+  },
+  "suggestions": [
+    {
+      "_id": "ai-intelligent-1",
+      "name": "API Name",
+      "serviceDomain": "BIAN Domain",
+      "description": "Clear and concise description",
+      "complexity": "low|medium|high",
+      "serviceOperations": [
         {
-          "title": "Caso de uso",
-          "description": "Descripción del caso",
-          "example": "Ejemplo específico"
+          "name": "Operation",
+          "method": "GET|POST|PUT|DELETE",
+          "description": "Brief description",
+          "path": "/endpoint"
         }
       ],
-      "businessCapabilities": ["capacidades", "negocio"],
+      "tags": ["tags"],
+      "searchKeywords": ["key", "words"],
       "functionalPattern": "Service Domain",
       "popularity": 0
     }
   ]
 }`;
 
-      const completion = await openaiService.openai.chat.completions.create({
-        model: "gpt-4o-mini", // Usar el modelo más avanzado disponible
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.2, // Menor temperatura para respuestas más consistentes
-        max_tokens: 3000,
-        response_format: { type: "json_object" }
-      });
+      const contextualHints = this.generateContextualHints(searchQuery, serviceDomain, complexity, language);
+
+      const userPrompt = `Analiza esta consulta y genera máximo ${limit} APIs BIAN relevantes:
+
+CONSULTA: "${searchQuery}"
+${serviceDomain ? `DOMINIO: ${serviceDomain}` : ''}
+${complexity ? `COMPLEJIDAD: ${complexity}` : ''}
+
+CONTEXTO:
+${contextualHints}
+
+Genera APIs específicas y prácticas. Mantén las descripciones concisas.`;
+
+      // Use shorter timeout and reduced token limit for faster responses
+      const completion = await Promise.race([
+        openaiService.openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          temperature: 0.1, // Lower temperature for more consistent responses
+          max_tokens: 2000, // Reduced from 3000 for faster responses
+          response_format: { type: "json_object" }
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('OpenAI request timeout')), 12000) // 12 second timeout
+        )
+      ]);
 
       const responseText = completion.choices[0].message.content;
       
@@ -275,7 +321,45 @@ Formato JSON requerido:
         console.log('🧠 [INTELLIGENT SEARCH] Raw response length:', responseText.length);
       }
 
-      const parsedResponse = JSON.parse(responseText);
+      // Enhanced JSON parsing with better error handling
+      let parsedResponse;
+      try {
+        // Clean the response text first
+        const cleanedText = responseText
+          .replace(/[\u0000-\u0019]+/g, '') // Remove control characters
+          .replace(/\n\s*\n/g, '\n') // Remove extra newlines
+          .trim();
+
+        parsedResponse = JSON.parse(cleanedText);
+        
+        // Validate the response structure
+        if (!parsedResponse.suggestions || !Array.isArray(parsedResponse.suggestions)) {
+          throw new Error('Invalid response structure');
+        }
+
+        // Ensure each suggestion has required fields
+        parsedResponse.suggestions = parsedResponse.suggestions.map((suggestion, index) => ({
+          _id: suggestion._id || `ai-intelligent-${index + 1}`,
+          name: suggestion.name || `API ${index + 1}`,
+          serviceDomain: suggestion.serviceDomain || 'General',
+          description: suggestion.description || 'Generated API',
+          complexity: suggestion.complexity || 'medium',
+          serviceOperations: suggestion.serviceOperations || [],
+          tags: suggestion.tags || [],
+          searchKeywords: suggestion.searchKeywords || [],
+          functionalPattern: suggestion.functionalPattern || 'Service Domain',
+          popularity: 0
+        }));
+
+      } catch (parseError) {
+        if (isDebug) {
+          console.log('⚠️ [INTELLIGENT SEARCH] JSON parse failed:', parseError.message);
+          console.log('Response preview:', responseText.substring(0, 200));
+        }
+        
+        // Fallback to generating structured response
+        parsedResponse = this.generateFallbackAIResponse(searchQuery, language, limit);
+      }
       
       if (isDebug) {
         console.log('✅ [INTELLIGENT SEARCH] Generated suggestions:', {
@@ -287,12 +371,17 @@ Formato JSON requerido:
       return {
         success: true,
         suggestions: parsedResponse.suggestions || [],
-        interpretation: parsedResponse.interpretation,
+        interpretation: parsedResponse.interpretation || {
+          query: searchQuery,
+          intent: 'General search',
+          domain: 'General',
+          keywords: [searchQuery]
+        },
         usage: completion.usage
       };
 
     } catch (error) {
-      console.error('Intelligent BIAN suggestions error:', error);
+      console.error('❌ [INTELLIGENT SEARCH] Error:', error);
       
       if (isDebug) {
         console.log('💥 [INTELLIGENT SEARCH] Error details:', {
@@ -302,12 +391,152 @@ Formato JSON requerido:
         });
       }
 
+      // Return structured fallback response
+      const fallbackResponse = this.generateFallbackAIResponse(searchQuery, options.language || 'en', options.limit || 6);
+      
       return {
-        success: false,
-        error: 'Failed to generate intelligent suggestions',
-        details: error.message
+        success: true, // Return success even for fallback
+        suggestions: fallbackResponse.suggestions,
+        interpretation: fallbackResponse.interpretation,
+        source: 'fallback'
       };
     }
+  }
+
+  /**
+   * Generate fallback AI response when OpenAI fails
+   */
+  generateFallbackAIResponse(searchQuery, language = 'en', limit = 6) {
+    const isSpanish = language === 'es';
+    const query = searchQuery.toLowerCase();
+    
+    const suggestions = [];
+    
+    // Generate contextual suggestions based on query content
+    if (query.includes('customer') || query.includes('cliente') || query.includes('profile') || query.includes('perfil')) {
+      suggestions.push({
+        _id: 'ai-intelligent-1',
+        name: isSpanish ? 'Gestión de Perfiles de Cliente' : 'Customer Profile Management',
+        serviceDomain: 'Customer Management',
+        description: isSpanish 
+          ? 'API para gestionar perfiles completos de clientes bancarios'
+          : 'API to manage complete banking customer profiles',
+        complexity: 'medium',
+        serviceOperations: [
+          {
+            name: isSpanish ? 'Obtener Perfil' : 'Retrieve Profile',
+            method: 'GET',
+            description: isSpanish ? 'Obtener perfil del cliente' : 'Get customer profile',
+            path: '/customer-profile/{id}'
+          },
+          {
+            name: isSpanish ? 'Actualizar Perfil' : 'Update Profile',
+            method: 'PUT',
+            description: isSpanish ? 'Actualizar información del cliente' : 'Update customer information',
+            path: '/customer-profile/{id}'
+          }
+        ],
+        tags: ['customer', 'profile', 'management'],
+        searchKeywords: ['customer', 'profile', 'cliente', 'perfil'],
+        functionalPattern: 'Service Domain',
+        popularity: 0
+      });
+    }
+
+    if (query.includes('payment') || query.includes('pago') || query.includes('transfer')) {
+      suggestions.push({
+        _id: 'ai-intelligent-2',
+        name: isSpanish ? 'Procesamiento de Pagos' : 'Payment Processing',
+        serviceDomain: 'Payment Order',
+        description: isSpanish 
+          ? 'API para procesar órdenes de pago y transferencias'
+          : 'API to process payment orders and transfers',
+        complexity: 'high',
+        serviceOperations: [
+          {
+            name: isSpanish ? 'Iniciar Pago' : 'Initiate Payment',
+            method: 'POST',
+            description: isSpanish ? 'Iniciar procesamiento de pago' : 'Start payment processing',
+            path: '/payment-order'
+          },
+          {
+            name: isSpanish ? 'Consultar Estado' : 'Check Status',
+            method: 'GET',
+            description: isSpanish ? 'Verificar estado del pago' : 'Check payment status',
+            path: '/payment-order/{id}/status'
+          }
+        ],
+        tags: ['payment', 'transfer', 'processing'],
+        searchKeywords: ['payment', 'pago', 'transfer', 'order'],
+        functionalPattern: 'Service Domain',
+        popularity: 0
+      });
+    }
+
+    if (query.includes('account') || query.includes('cuenta') || query.includes('balance')) {
+      suggestions.push({
+        _id: 'ai-intelligent-3',
+        name: isSpanish ? 'Gestión de Cuentas' : 'Account Management',
+        serviceDomain: 'Account Management',
+        description: isSpanish 
+          ? 'API para gestionar cuentas bancarias y saldos'
+          : 'API to manage bank accounts and balances',
+        complexity: 'medium',
+        serviceOperations: [
+          {
+            name: isSpanish ? 'Consultar Saldo' : 'Check Balance',
+            method: 'GET',
+            description: isSpanish ? 'Consultar saldo de cuenta' : 'Check account balance',
+            path: '/account/{id}/balance'
+          },
+          {
+            name: isSpanish ? 'Obtener Transacciones' : 'Get Transactions',
+            method: 'GET',
+            description: isSpanish ? 'Obtener historial de transacciones' : 'Get transaction history',
+            path: '/account/{id}/transactions'
+          }
+        ],
+        tags: ['account', 'balance', 'transactions'],
+        searchKeywords: ['account', 'cuenta', 'balance', 'saldo'],
+        functionalPattern: 'Service Domain',
+        popularity: 0
+      });
+    }
+
+    // If no specific matches, add a generic suggestion
+    if (suggestions.length === 0) {
+      suggestions.push({
+        _id: 'ai-intelligent-fallback',
+        name: isSpanish ? 'API Bancaria General' : 'General Banking API',
+        serviceDomain: 'General',
+        description: isSpanish 
+          ? `API para operaciones bancarias relacionadas con: ${searchQuery}`
+          : `Banking API for operations related to: ${searchQuery}`,
+        complexity: 'medium',
+        serviceOperations: [
+          {
+            name: isSpanish ? 'Consultar Datos' : 'Retrieve Data',
+            method: 'GET',
+            description: isSpanish ? 'Consultar información' : 'Retrieve information',
+            path: '/data'
+          }
+        ],
+        tags: ['general', 'banking'],
+        searchKeywords: [searchQuery],
+        functionalPattern: 'Service Domain',
+        popularity: 0
+      });
+    }
+
+    return {
+      interpretation: {
+        query: searchQuery,
+        intent: isSpanish ? 'Búsqueda de APIs bancarias' : 'Banking API search',
+        domain: suggestions[0]?.serviceDomain || 'General',
+        keywords: [searchQuery]
+      },
+      suggestions: suggestions.slice(0, limit)
+    };
   }
 
   /**
@@ -726,20 +955,31 @@ Service Operations: ${api.serviceOperations.map(op => `${op.method} ${op.name}`)
 Business Capabilities: ${api.businessCapabilities.join(', ')}
 Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
 
-      const completion = await openaiService.openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.3,
-        max_tokens: 1500
-      });
+      const response = await Promise.race([
+        openaiService.openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.3,
+          max_tokens: 1500
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('OpenAI analysis timeout')), 10000) // 10 second timeout
+        )
+      ]);
+
+      const responseText = response.choices[0].message.content;
+      
+      if (isDebug) {
+        console.log('🤖 [API DETAILS] AI Response received');
+      }
 
       return {
         success: true,
-        explanation: completion.choices[0].message.content,
-        usage: completion.usage
+        explanation: responseText,
+        usage: response.usage
       };
 
     } catch (error) {
@@ -1306,14 +1546,23 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
       `;
 
       // Call OpenAI
-      const response = await this.callOpenAI([
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ], {
-        temperature: 0.3,
-        max_tokens: 1500
-      });
+      const response = await Promise.race([
+        openaiService.openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.3,
+          max_tokens: 1500
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('OpenAI analysis timeout')), 10000) // 10 second timeout
+        )
+      ]);
 
+      const responseText = response.choices[0].message.content;
+      
       if (isDebug) {
         console.log('🤖 [INTELLIGENT ANALYSIS] AI Response received');
       }
@@ -1321,7 +1570,7 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
       // Parse the JSON response
       let analysisResult;
       try {
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           analysisResult = JSON.parse(jsonMatch[0]);
         } else {

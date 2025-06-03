@@ -14,8 +14,8 @@ if (isDebug) {
 
 // Create axios instance
 const api = axios.create({
-  baseURL: `${API_URL}/api`,
-  timeout: 30000,
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:10000/api',
+  timeout: 45000, // Increased timeout for API operations
   headers: {
     'Content-Type': 'application/json',
   },
@@ -144,10 +144,16 @@ export const bianService = {
       q: query || '',
       ...filters
     });
-    return api.get(`/bian/search?${params}`);
+    
+    // Use longer timeout for search operations
+    return api.get(`/bian/search?${params}`, {
+      timeout: 60000 // 60 seconds for search operations
+    });
   },
   intelligentSearch: (data) => {
-    return api.post('/bian/intelligent-search', data);
+    return api.post('/bian/intelligent-search', data, {
+      timeout: 45000 // 45 seconds for AI operations
+    });
   },
   getPopularAPIs: (limit = 6) => {
     return api.get(`/bian/popular?limit=${limit}`);
@@ -160,10 +166,14 @@ export const bianService = {
     return api.get(`/bian/${id}?${params}`);
   },
   generateExplanation: (id, data) => {
-    return api.post(`/bian/${id}/explain`, data);
+    return api.post(`/bian/${id}/explain`, data, {
+      timeout: 30000 // 30 seconds for explanations
+    });
   },
   createAPIFromReference: (id, data) => {
-    return api.post(`/bian/${id}/create-api`, data);
+    return api.post(`/bian/${id}/create-api`, data, {
+      timeout: 45000 // 45 seconds for API creation
+    });
   }
 }
 
