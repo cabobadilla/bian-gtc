@@ -643,6 +643,17 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
    */
   async createUserAPIFromReference(referenceId, customizations, userId, companyId) {
     try {
+      // Always log this to see what's happening
+      console.log('🔧 [CREATE API] Starting creation (ALWAYS LOG):', {
+        referenceId,
+        referenceIdType: typeof referenceId,
+        isDebugValue: isDebug,
+        debugEnv: process.env.DEBUG,
+        customizations,
+        userId,
+        companyId
+      });
+
       if (isDebug) {
         console.log('🔧 [CREATE API] Starting creation:', {
           referenceId,
@@ -661,6 +672,8 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
 
       // Check if this is an AI-generated API (not in database)
       if (referenceId.startsWith('ai-generated-') || referenceId.startsWith('fallback-') || referenceId.startsWith('example-')) {
+        console.log('🤖 [CREATE API] This is an AI-generated API (ALWAYS LOG)');
+        
         if (isDebug) {
           console.log('🤖 [CREATE API] This is an AI-generated API, creating from provided data');
         }
@@ -692,11 +705,27 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
           tags: apiData.tags || [],
           baseReference: {
             type: 'bian-ai-generated',
-            referenceId: referenceId,
+            referenceId: null, // Don't set ObjectId for AI-generated APIs
             referenceName: apiData.name,
             source: 'ai-generated'
           }
         });
+
+        // Generate slug manually before saving
+        const apiName = customizations.name || `${apiData.name}_Custom`;
+        newAPI.slug = apiName
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '');
+
+        if (isDebug) {
+          console.log('🔧 [CREATE API] AI-generated API object created:', {
+            name: newAPI.name,
+            slug: newAPI.slug,
+            baseReference: newAPI.baseReference
+          });
+        }
 
         // Save first to trigger pre-save middleware that creates initial version
         await newAPI.save();
@@ -722,6 +751,8 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
       }
 
       // For database APIs, proceed with normal flow
+      console.log('🗄️ [CREATE API] Not AI-generated, proceeding with database lookup (ALWAYS LOG):', referenceId);
+      
       if (isDebug) {
         console.log('🗄️ [CREATE API] Not AI-generated, proceeding with database lookup for:', referenceId);
       }

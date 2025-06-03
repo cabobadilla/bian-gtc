@@ -150,7 +150,8 @@ const apiSchema = new mongoose.Schema({
     },
     referenceId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'BIANReferenceAPI'
+      ref: 'BIANReferenceAPI',
+      required: false
     },
     referenceName: {
       type: String
