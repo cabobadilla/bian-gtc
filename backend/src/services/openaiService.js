@@ -39,7 +39,7 @@ Output ONLY valid JSON that represents the OpenAPI specification.`;
         : `Create a complete OpenAPI 3.0.3 specification for: ${prompt}\n\nEnsure the API follows BIAN standards and includes comprehensive banking functionality.`;
 
       const completion = await this.openai.chat.completions.create({
-        model: "gpt-4-1106-preview",
+        model: "gpt-3.5-turbo",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -95,7 +95,7 @@ Provide your response as JSON with this structure:
 }`;
 
       const completion = await this.openai.chat.completions.create({
-        model: "gpt-4-1106-preview",
+        model: "gpt-3.5-turbo",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Analyze this API description for BIAN mapping: ${apiDescription}` }
@@ -146,7 +146,7 @@ Provide suggestions as JSON:
 }`;
 
       const completion = await this.openai.chat.completions.create({
-        model: "gpt-4-1106-preview",
+        model: "gpt-3.5-turbo",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Analyze this OpenAPI spec and suggest improvements:\n\n${JSON.stringify(openApiSpec, null, 2)}` }
@@ -189,7 +189,7 @@ Create documentation that includes:
 Format as structured text suitable for README or documentation site.`;
 
       const completion = await this.openai.chat.completions.create({
-        model: "gpt-4-1106-preview",
+        model: "gpt-3.5-turbo",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Generate documentation for this API:\n\n${JSON.stringify(openApiSpec, null, 2)}` }

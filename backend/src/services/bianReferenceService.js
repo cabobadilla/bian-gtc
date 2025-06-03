@@ -59,13 +59,37 @@ class BIANReferenceService {
           console.log('🤖 [BIAN SEARCH] No DB results, using ChatGPT...');
         }
         
-        const aiResults = await this.generateBIANSuggestions(searchQuery, language);
-        if (aiResults.success) {
+        // Use Promise.race to implement timeout
+        const aiPromise = this.generateBIANSuggestions(searchQuery, language);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('AI_TIMEOUT')), 8000) // 8 second timeout
+        );
+        
+        try {
+          const aiResults = await Promise.race([aiPromise, timeoutPromise]);
+          
+          if (aiResults.success) {
+            return {
+              success: true,
+              results: aiResults.suggestions,
+              count: aiResults.suggestions.length,
+              source: 'ai-generated'
+            };
+          }
+        } catch (error) {
+          if (isDebug) {
+            console.log('⏰ [BIAN SEARCH] AI timeout or error, using fallback:', error.message);
+          }
+          
+          // Immediate fallback on timeout or error
+          const fallbackSuggestions = this.generateFallbackSuggestions(searchQuery, language);
+          
           return {
             success: true,
-            results: aiResults.suggestions,
-            count: aiResults.suggestions.length,
-            source: 'ai-generated'
+            results: fallbackSuggestions,
+            count: fallbackSuggestions.length,
+            source: 'fallback-timeout',
+            note: 'AI service timeout, showing contextual suggestions'
           };
         }
       }
@@ -151,13 +175,13 @@ JSON format:
 }`;
 
       const completion = await openaiService.openai.chat.completions.create({
-        model: "gpt-4-1106-preview",
+        model: "gpt-3.5-turbo",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
         temperature: 0.3,
-        max_tokens: 2000
+        max_tokens: 1500
       });
 
       const responseText = completion.choices[0].message.content;
@@ -423,13 +447,13 @@ Business Capabilities: ${api.businessCapabilities.join(', ')}
 Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
 
       const completion = await openaiService.openai.chat.completions.create({
-        model: "gpt-4-1106-preview",
+        model: "gpt-3.5-turbo",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
         temperature: 0.3,
-        max_tokens: 2000
+        max_tokens: 1500
       });
 
       return {

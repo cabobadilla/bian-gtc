@@ -134,12 +134,29 @@ export const apiService = {
 
 // BIAN Reference services
 export const bianService = {
-  searchAPIs: (params = {}) => api.get('/bian/search', { params }),
-  getAPIDetails: (id, params = {}) => api.get(`/bian/${id}`, { params }),
-  explainAPI: (id, data) => api.post(`/bian/${id}/explain`, data),
-  getServiceDomains: () => api.get('/bian/domains'),
-  getPopularAPIs: (limit = 10) => api.get('/bian/popular', { params: { limit } }),
-  createAPIFromReference: (id, data) => api.post(`/bian/${id}/create-api`, data),
+  searchAPIs: (query, filters = {}) => {
+    const params = new URLSearchParams({
+      q: query || '',
+      ...filters
+    });
+    return api.get(`/bian/search?${params}`);
+  },
+  getPopularAPIs: (limit = 6) => {
+    return api.get(`/bian/popular?limit=${limit}`);
+  },
+  getServiceDomains: () => {
+    return api.get('/bian/domains');
+  },
+  getAPIDetails: (id, options = {}) => {
+    const params = new URLSearchParams(options);
+    return api.get(`/bian/${id}?${params}`);
+  },
+  generateExplanation: (id, data) => {
+    return api.post(`/bian/${id}/explain`, data);
+  },
+  createAPIFromReference: (id, data) => {
+    return api.post(`/bian/${id}/create-api`, data);
+  }
 }
 
 // User services

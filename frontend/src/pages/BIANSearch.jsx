@@ -25,16 +25,21 @@ import {
   Psychology as AIIcon,
   Layers as LayersIcon,
   Business as BusinessIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  TrendingUp as TrendingUpIcon,
+  Code as CodeIcon,
+  Lightbulb as LightbulbIcon
 } from '@mui/icons-material'
 import { useQuery, useMutation } from 'react-query'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { useCompanyStore } from '../store/companyStore'
 
 import { bianService, companyService } from '../services/api'
 
 const BIANSearch = () => {
   const navigate = useNavigate()
+  const { companies } = useCompanyStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [filters, setFilters] = useState({
     serviceDomain: '',
@@ -81,7 +86,6 @@ const BIANSearch = () => {
     }
   )
 
-  const companies = companiesData?.data?.companies || []
   const hasCompanies = companies.length > 0
 
   const handleSearch = () => {
@@ -110,8 +114,8 @@ const BIANSearch = () => {
     }))
   }
 
-  const handleAPISelect = (apiId) => {
-    navigate(`/bian/${apiId}`)
+  const handleAPIClick = (api) => {
+    navigate(`/bian/${api._id}`, { state: { api } })
   }
 
   const getComplexityColor = (complexity) => {
@@ -133,7 +137,7 @@ const BIANSearch = () => {
           boxShadow: 3
         }
       }}
-      onClick={() => handleAPISelect(api._id)}
+      onClick={() => handleAPIClick(api)}
     >
       <CardContent>
         <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
@@ -263,7 +267,7 @@ const BIANSearch = () => {
   }
 
   return (
-    <Container maxWidth="lg">
+    <Container maxWidth="lg" sx={{ py: 4 }}>
       <Box mb={4}>
         <Typography variant="h4" gutterBottom>
           🔍 Buscar APIs BIAN de Referencia
@@ -396,10 +400,80 @@ const BIANSearch = () => {
           )}
 
           {searchResults?.data?.results && (
-            <Grid container spacing={2}>
+            <Grid container spacing={3}>
               {searchResults.data.results.map((api) => (
                 <Grid item xs={12} md={6} lg={4} key={api._id}>
-                  <APICard api={api} />
+                  <Card 
+                    sx={{ 
+                      height: '100%', 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      cursor: 'pointer',
+                      '&:hover': {
+                        boxShadow: 6,
+                        transform: 'translateY(-2px)',
+                        transition: 'all 0.2s ease-in-out'
+                      }
+                    }}
+                    onClick={() => handleAPIClick(api)}
+                  >
+                    <CardContent>
+                      <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
+                        <Typography variant="h6" component="h3" sx={{ flex: 1 }}>
+                          {api.name}
+                        </Typography>
+                        <Chip 
+                          label={api.complexity}
+                          color={getComplexityColor(api.complexity)}
+                          size="small"
+                        />
+                      </Box>
+                      
+                      <Typography 
+                        variant="body2" 
+                        color="text.secondary" 
+                        sx={{ mb: 2, minHeight: '2.5em' }}
+                      >
+                        {api.localizedDescription || api.description}
+                      </Typography>
+                      
+                      <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
+                        <Chip 
+                          icon={<LayersIcon />}
+                          label={api.serviceDomain}
+                          variant="outlined"
+                          size="small"
+                        />
+                        {api.popularity && (
+                          <Chip 
+                            label={`${api.popularity} usos`}
+                            variant="outlined"
+                            size="small"
+                            color="primary"
+                          />
+                        )}
+                      </Box>
+                      
+                      <Box display="flex" gap={1} flexWrap="wrap">
+                        {api.serviceOperations?.slice(0, 3).map((op, index) => (
+                          <Chip 
+                            key={index}
+                            label={`${op.method} ${op.name}`}
+                            size="small"
+                            variant="outlined"
+                          />
+                        ))}
+                        {api.serviceOperations?.length > 3 && (
+                          <Chip 
+                            label={`+${api.serviceOperations.length - 3} más`}
+                            size="small"
+                            variant="outlined"
+                            color="secondary"
+                          />
+                        )}
+                      </Box>
+                    </CardContent>
+                  </Card>
                 </Grid>
               ))}
             </Grid>
