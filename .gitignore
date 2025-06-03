@@ -191,4 +191,7 @@ temp/
 Thumbs.db
 
 # Local development
-.local 
+.local
+
+# Production deployment configuration
+DEPLOYMENT.md 

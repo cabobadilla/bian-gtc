@@ -1,5 +1,40 @@
 services:
-  # Backend API Service
+  # Unified Service - Backend + Frontend (Primary)
+  - type: web
+    name: bian-gtc
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: |
+      echo "🏗️ Building unified service..."
+      echo "📁 Installing backend dependencies..."
+      cd backend && npm install
+      echo "📁 Installing frontend dependencies..."
+      cd ../frontend && npm install && npm audit fix --force
+      echo "🔨 Building frontend..."
+      npm run build
+      echo "✅ Build completed!"
+    startCommand: cd backend && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEBUG
+        value: "ON"
+      - key: MONGODB_URI
+        fromSecret: true
+      - key: GOOGLE_CLIENT_ID
+        fromSecret: true
+      - key: GOOGLE_CLIENT_SECRET
+        fromSecret: true
+      - key: OPENAI_API_KEY
+        fromSecret: true
+      - key: JWT_SECRET
+        fromSecret: true
+      - key: PORT
+        value: 10000
+
+  # Backend API Service (Alternative - keep for backup)
   - type: web
     name: bian-api-backend
     env: node
@@ -27,7 +62,7 @@ services:
       - key: PORT
         value: 10000
 
-  # Frontend Static Site (minimal config like TechInterview)
+  # Frontend Static Site (Alternative - keep for backup)
   - type: static
     name: bian-api-frontend
     region: oregon

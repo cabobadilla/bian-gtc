@@ -324,17 +324,38 @@ Genera APIs específicas y prácticas. Mantén las descripciones concisas.`;
       // Enhanced JSON parsing with better error handling
       let parsedResponse;
       try {
-        // Clean the response text first
-        const cleanedText = responseText
+        // More aggressive text cleaning for JSON parsing
+        let cleanedText = responseText;
+        
+        // Remove common JSON corruption issues
+        cleanedText = cleanedText
           .replace(/[\u0000-\u0019]+/g, '') // Remove control characters
           .replace(/\n\s*\n/g, '\n') // Remove extra newlines
+          .replace(/\r/g, '') // Remove carriage returns
+          .replace(/\t/g, ' ') // Replace tabs with spaces
+          .replace(/\\n/g, ' ') // Replace escaped newlines
+          .replace(/\\/g, '\\\\') // Escape backslashes properly
+          .replace(/"/g, '"') // Replace smart quotes
+          .replace(/"/g, '"') // Replace smart quotes
+          .replace(/'/g, "'") // Replace smart apostrophes
           .trim();
 
+        // Try to find and extract just the JSON part
+        let jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          cleanedText = jsonMatch[0];
+        }
+
+        if (isDebug) {
+          console.log('🧹 [INTELLIGENT SEARCH] Cleaned text preview:', cleanedText.substring(0, 300));
+        }
+
+        // Attempt to parse
         parsedResponse = JSON.parse(cleanedText);
         
         // Validate the response structure
         if (!parsedResponse.suggestions || !Array.isArray(parsedResponse.suggestions)) {
-          throw new Error('Invalid response structure');
+          throw new Error('Invalid response structure - missing or invalid suggestions array');
         }
 
         // Ensure each suggestion has required fields
@@ -354,11 +375,35 @@ Genera APIs específicas y prácticas. Mantén las descripciones concisas.`;
       } catch (parseError) {
         if (isDebug) {
           console.log('⚠️ [INTELLIGENT SEARCH] JSON parse failed:', parseError.message);
-          console.log('Response preview:', responseText.substring(0, 200));
+          console.log('📝 [INTELLIGENT SEARCH] Original response length:', responseText.length);
+          console.log('📝 [INTELLIGENT SEARCH] Response preview (first 500 chars):', responseText.substring(0, 500));
+          console.log('📝 [INTELLIGENT SEARCH] Response preview (last 500 chars):', responseText.substring(Math.max(0, responseText.length - 500)));
         }
         
-        // Fallback to generating structured response
-        parsedResponse = this.generateFallbackAIResponse(searchQuery, language, limit);
+        // Try alternative parsing methods
+        try {
+          // Method 2: Try to extract JSON between first { and last }
+          const firstBrace = responseText.indexOf('{');
+          const lastBrace = responseText.lastIndexOf('}');
+          
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            const extractedJson = responseText.substring(firstBrace, lastBrace + 1);
+            parsedResponse = JSON.parse(extractedJson);
+            
+            if (isDebug) {
+              console.log('✅ [INTELLIGENT SEARCH] Alternative parsing successful');
+            }
+          } else {
+            throw new Error('Could not extract valid JSON boundaries');
+          }
+        } catch (alternativeError) {
+          if (isDebug) {
+            console.log('❌ [INTELLIGENT SEARCH] Alternative parsing also failed:', alternativeError.message);
+          }
+          
+          // Fallback to generating structured response
+          parsedResponse = this.generateFallbackAIResponse(searchQuery, language, limit);
+        }
       }
       
       if (isDebug) {

@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
+const path = require('path');
 require('dotenv').config();
 
 const connectDB = require('./config/database');
@@ -67,7 +68,8 @@ app.use(cors({
     const allowedOrigins = process.env.NODE_ENV === 'production' 
       ? [
           'https://bian-api-frontend.onrender.com', 
-          'https://bian-gtc.onrender.com'
+          'https://bian-gtc.onrender.com',
+          'https://bian-api-backend.onrender.com'
         ]
       : [
           'http://localhost:3000', 
@@ -85,6 +87,8 @@ app.use(cors({
       callback(null, true);
     } else {
       console.log('🚫 CORS blocked origin:', origin);
+      console.log('📝 Allowed origins:', allowedOrigins);
+      console.log('🌍 Environment:', process.env.NODE_ENV);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -178,6 +182,35 @@ app.use('/api/apis', apiRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/bian', bianReferenceRoutes);
 
+// Serve static files from the frontend build in production
+if (process.env.NODE_ENV === 'production') {
+  const frontendBuildPath = path.join(__dirname, '../../frontend/dist');
+  
+  // Serve static files
+  app.use(express.static(frontendBuildPath));
+  
+  // Handle React Router - send all non-API requests to index.html
+  app.get('*', (req, res) => {
+    // Don't serve index.html for API routes
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({
+        error: 'API route not found',
+        path: req.originalUrl
+      });
+    }
+    
+    res.sendFile(path.join(frontendBuildPath, 'index.html'));
+  });
+} else {
+  // 404 handler for development (API only)
+  app.use('*', (req, res) => {
+    res.status(404).json({
+      error: 'Route not found',
+      path: req.originalUrl
+    });
+  });
+}
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
@@ -199,14 +232,6 @@ app.use((err, req, res, next) => {
     error: process.env.NODE_ENV === 'production' 
       ? 'Internal Server Error' 
       : err.message
-  });
-});
-
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    error: 'Route not found',
-    path: req.originalUrl
   });
 });
 

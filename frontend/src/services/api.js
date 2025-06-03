@@ -1,20 +1,51 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
-// Get backend URL from environment variable (with fallback for development)
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
+// Get backend URL - auto-detect in production, use env variable in development
+const getAPIUrl = () => {
+  // If we have explicit environment variable, use it
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL
+  }
+  
+  // In production, check if we're on the unified domain or separate services
+  if (import.meta.env.PROD) {
+    const currentHost = window.location.hostname
+    
+    // If we're on bian-gtc.onrender.com (unified service), backend is same origin
+    if (currentHost.includes('bian-gtc')) {
+      return `${window.location.origin}/api`
+    }
+    
+    // If we're on bian-api-frontend.onrender.com (separate services), use backend URL
+    if (currentHost.includes('bian-api-frontend')) {
+      return 'https://bian-api-backend.onrender.com'
+    }
+    
+    // Default production backend
+    return 'https://bian-api-backend.onrender.com'
+  }
+  
+  // Development fallback
+  return 'http://localhost:10000/api'
+}
+
+const API_BASE_URL = getAPIUrl()
 
 // Debug logging
 const isDebug = import.meta.env.VITE_DEBUG === 'ON' || import.meta.env.DEBUG === 'ON'
 
 if (isDebug) {
   console.log('🐛 Frontend Debug mode enabled')
-  console.log('🔗 API URL:', API_URL)
+  console.log('🔗 API Base URL:', API_BASE_URL)
+  console.log('🌍 Environment:', import.meta.env.MODE)
+  console.log('🏭 Production:', import.meta.env.PROD)
+  console.log('📍 Origin:', window.location.origin)
 }
 
 // Create axios instance
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:10000/api',
+  baseURL: API_BASE_URL,
   timeout: 45000, // Increased timeout for API operations
   headers: {
     'Content-Type': 'application/json',
