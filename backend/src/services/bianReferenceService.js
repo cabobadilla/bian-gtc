@@ -642,7 +642,7 @@ Formato JSON requerido:
       }
 
       // Check if this is an AI-generated API (not in database)
-      if (apiId.startsWith('ai-generated-') || apiId.startsWith('fallback-') || apiId.startsWith('example-')) {
+      if (apiId.startsWith('ai-generated-') || apiId.startsWith('ai-intelligent-') || apiId.startsWith('fallback-') || apiId.startsWith('example-') || apiId.startsWith('popular-example-') || apiId.startsWith('enhanced-')) {
         if (isDebug) {
           console.log('🤖 [API DETAILS] This is an AI-generated API, not in database');
         }
@@ -931,7 +931,7 @@ Use Cases: ${api.useCases.map(uc => uc.title).join(', ')}`;
       }
 
       // Check if this is an AI-generated API (not in database)
-      if (referenceId.startsWith('ai-generated-') || referenceId.startsWith('fallback-') || referenceId.startsWith('example-')) {
+      if (referenceId.startsWith('ai-generated-') || referenceId.startsWith('ai-intelligent-') || referenceId.startsWith('fallback-') || referenceId.startsWith('example-') || referenceId.startsWith('popular-example-') || referenceId.startsWith('enhanced-')) {
         console.log('🤖 [CREATE API] This is an AI-generated API (ALWAYS LOG)');
         
         if (isDebug) {

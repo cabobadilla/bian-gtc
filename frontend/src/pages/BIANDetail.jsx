@@ -115,7 +115,7 @@ const BIANDetail = () => {
 
   const handleGenerateExplanation = () => {
     // Check if this is an AI-generated API
-    if (id.startsWith('ai-generated-') || id.startsWith('fallback-') || id.startsWith('example-')) {
+    if (id.startsWith('ai-generated-') || id.startsWith('ai-intelligent-') || id.startsWith('fallback-') || id.startsWith('example-') || id.startsWith('popular-example-') || id.startsWith('enhanced-')) {
       toast.info('Las APIs generadas por IA ya incluyen explicaciones contextuales en su descripción');
       return;
     }
@@ -160,7 +160,7 @@ const BIANDetail = () => {
   };
 
   // Check if this is an AI-generated API
-  const isAIGenerated = id.startsWith('ai-generated-') || id.startsWith('fallback-') || id.startsWith('example-');
+  const isAIGenerated = id.startsWith('ai-generated-') || id.startsWith('ai-intelligent-') || id.startsWith('fallback-') || id.startsWith('example-') || id.startsWith('popular-example-') || id.startsWith('enhanced-');
 
   if (isLoading) {
     return (

@@ -366,7 +366,7 @@ router.post('/:id/explain', verifyToken, async (req, res) => {
     const { language = 'en' } = req.body;
 
     // Check if this is an AI-generated API
-    if (id.startsWith('ai-generated-') || id.startsWith('fallback-') || id.startsWith('example-')) {
+    if (id.startsWith('ai-generated-') || id.startsWith('ai-intelligent-') || id.startsWith('fallback-') || id.startsWith('example-') || id.startsWith('popular-example-') || id.startsWith('enhanced-')) {
       return res.status(400).json({
         success: false,
         error: 'Cannot generate explanations for AI-generated APIs',
