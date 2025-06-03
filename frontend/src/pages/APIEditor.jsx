@@ -32,7 +32,8 @@ import {
   Code as CodeIcon,
   Description as DescriptionIcon,
   Visibility as VisibilityIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { apiService } from '../services/api';
@@ -62,6 +63,13 @@ const APIEditor = () => {
   // OpenAPI spec state
   const [specData, setSpecData] = useState('');
   const [specError, setSpecError] = useState('');
+
+  // Schema management state
+  const [schemas, setSchemas] = useState({});
+  const [selectedSchema, setSelectedSchema] = useState(null);
+  const [schemaDialogOpen, setSchemaDialogOpen] = useState(false);
+  const [newSchemaName, setNewSchemaName] = useState('');
+  const [editingSchema, setEditingSchema] = useState(null);
 
   // Get API details
   const { data: apiData, isLoading, error } = useQuery({
@@ -147,6 +155,92 @@ const APIEditor = () => {
       }
     }
   }, [api, specData]);
+
+  // Extract schemas from OpenAPI spec
+  useEffect(() => {
+    if (specData) {
+      try {
+        const spec = JSON.parse(specData);
+        if (spec.components && spec.components.schemas) {
+          setSchemas(spec.components.schemas);
+          console.log('🔧 [API EDITOR] Schemas extracted:', Object.keys(spec.components.schemas));
+        }
+      } catch (error) {
+        console.error('Error parsing spec for schemas:', error);
+      }
+    }
+  }, [specData]);
+
+  // Schema management functions
+  const handleSchemaEdit = (schemaName) => {
+    setSelectedSchema(schemaName);
+    setEditingSchema(JSON.stringify(schemas[schemaName], null, 2));
+    setSchemaDialogOpen(true);
+  };
+
+  const handleSchemaCreate = () => {
+    if (newSchemaName.trim()) {
+      const newSchema = {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Unique identifier'
+          }
+        },
+        required: ['id']
+      };
+      
+      const updatedSchemas = {
+        ...schemas,
+        [newSchemaName]: newSchema
+      };
+      
+      setSchemas(updatedSchemas);
+      updateSpecWithSchemas(updatedSchemas);
+      setNewSchemaName('');
+      setUnsavedChanges(true);
+    }
+  };
+
+  const handleSchemaSave = () => {
+    try {
+      const updatedSchema = JSON.parse(editingSchema);
+      const updatedSchemas = {
+        ...schemas,
+        [selectedSchema]: updatedSchema
+      };
+      
+      setSchemas(updatedSchemas);
+      updateSpecWithSchemas(updatedSchemas);
+      setSchemaDialogOpen(false);
+      setUnsavedChanges(true);
+      toast.success('Schema actualizado');
+    } catch (error) {
+      toast.error('JSON inválido en el schema');
+    }
+  };
+
+  const handleSchemaDelete = (schemaName) => {
+    const updatedSchemas = { ...schemas };
+    delete updatedSchemas[schemaName];
+    
+    setSchemas(updatedSchemas);
+    updateSpecWithSchemas(updatedSchemas);
+    setUnsavedChanges(true);
+    toast.success('Schema eliminado');
+  };
+
+  const updateSpecWithSchemas = (updatedSchemas) => {
+    try {
+      const spec = JSON.parse(specData);
+      if (!spec.components) spec.components = {};
+      spec.components.schemas = updatedSchemas;
+      setSpecData(JSON.stringify(spec, null, 2));
+    } catch (error) {
+      console.error('Error updating spec with schemas:', error);
+    }
+  };
 
   // Update basic API info
   const updateAPIMutation = useMutation({
@@ -332,6 +426,7 @@ const APIEditor = () => {
         <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
           <Tab label="Información Básica" icon={<DescriptionIcon />} />
           <Tab label="Especificación OpenAPI" icon={<CodeIcon />} />
+          <Tab label="Schemas de Datos" icon={<SettingsIcon />} />
           <Tab label="Vista Previa Swagger" icon={<PreviewIcon />} />
         </Tabs>
       </Box>
@@ -512,6 +607,120 @@ const APIEditor = () => {
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>
+              Schemas de Datos BIAN
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Gestiona los modelos de datos de tu API. Puedes editar los schemas por defecto de BIAN y agregar campos personalizados.
+            </Typography>
+            
+            {/* Add new schema */}
+            <Box mb={3}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={8}>
+                  <TextField
+                    fullWidth
+                    label="Nombre del nuevo schema"
+                    value={newSchemaName}
+                    onChange={(e) => setNewSchemaName(e.target.value)}
+                    placeholder="Ej: CustomerProfile, TransactionData"
+                  />
+                </Grid>
+                <Grid item xs={4}>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={handleSchemaCreate}
+                    disabled={!newSchemaName.trim()}
+                    fullWidth
+                  >
+                    Crear Schema
+                  </Button>
+                </Grid>
+              </Grid>
+            </Box>
+            
+            {/* Schemas list */}
+            {Object.keys(schemas).length > 0 ? (
+              <Grid container spacing={2}>
+                {Object.entries(schemas).map(([schemaName, schema]) => (
+                  <Grid item xs={12} md={6} key={schemaName}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
+                          <Typography variant="h6" color="primary">
+                            {schemaName}
+                          </Typography>
+                          <Box display="flex" gap={1}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleSchemaEdit(schemaName)}
+                            >
+                              Editar
+                            </Button>
+                            <Button
+                              size="small"
+                              color="error"
+                              onClick={() => handleSchemaDelete(schemaName)}
+                            >
+                              Eliminar
+                            </Button>
+                          </Box>
+                        </Box>
+                        
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                          Tipo: {schema.type || 'object'}
+                        </Typography>
+                        
+                        {schema.description && (
+                          <Typography variant="body2" sx={{ mb: 2 }}>
+                            {schema.description}
+                          </Typography>
+                        )}
+                        
+                        {schema.properties && (
+                          <Box>
+                            <Typography variant="subtitle2" gutterBottom>
+                              Propiedades ({Object.keys(schema.properties).length}):
+                            </Typography>
+                            <Box display="flex" gap={1} flexWrap="wrap">
+                              {Object.keys(schema.properties).slice(0, 5).map((prop) => (
+                                <Chip
+                                  key={prop}
+                                  label={prop}
+                                  size="small"
+                                  variant="outlined"
+                                />
+                              ))}
+                              {Object.keys(schema.properties).length > 5 && (
+                                <Chip
+                                  label={`+${Object.keys(schema.properties).length - 5} más`}
+                                  size="small"
+                                  color="primary"
+                                />
+                              )}
+                            </Box>
+                          </Box>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            ) : (
+              <Alert severity="info">
+                No se encontraron schemas en la especificación OpenAPI. 
+                Los schemas definen la estructura de los datos que tu API maneja.
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tabValue === 3 && (
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
               Vista Previa Swagger UI
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -553,6 +762,46 @@ const APIEditor = () => {
           <Button onClick={() => setAddTagOpen(false)}>Cancelar</Button>
           <Button onClick={handleAddTag} variant="contained">
             Agregar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Schema Edit Dialog */}
+      <Dialog 
+        open={schemaDialogOpen} 
+        onClose={() => setSchemaDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Editar Schema: {selectedSchema}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Edita la estructura JSON del schema. Puedes agregar nuevas propiedades, 
+            cambiar tipos de datos y definir validaciones.
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            rows={15}
+            value={editingSchema || ''}
+            onChange={(e) => setEditingSchema(e.target.value)}
+            variant="outlined"
+            sx={{
+              '& .MuiInputBase-input': {
+                fontFamily: 'monospace',
+                fontSize: '0.875rem'
+              }
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSchemaDialogOpen(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSchemaSave} variant="contained">
+            Guardar Schema
           </Button>
         </DialogActions>
       </Dialog>
