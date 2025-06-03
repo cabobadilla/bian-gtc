@@ -559,7 +559,19 @@ router.put('/:id/spec', verifyToken, requireAPIAccess('editor'), async (req, res
   try {
     const { spec, version, changelog } = req.body;
 
+    console.log('🔧 [UPDATE SPEC] Request received:', {
+      apiId: req.params.id,
+      hasSpec: !!spec,
+      specKeys: spec ? Object.keys(spec) : null,
+      hasComponents: !!(spec?.components),
+      hasSchemas: !!(spec?.components?.schemas),
+      schemasCount: spec?.components?.schemas ? Object.keys(spec.components.schemas).length : 0,
+      version: version,
+      changelog: changelog
+    });
+
     if (!spec) {
+      console.log('❌ [UPDATE SPEC] No specification provided');
       return res.status(400).json({
         success: false,
         error: 'Specification is required'
@@ -569,7 +581,9 @@ router.put('/:id/spec', verifyToken, requireAPIAccess('editor'), async (req, res
     // Validate OpenAPI structure
     try {
       openaiService.validateOpenAPIStructure(spec);
+      console.log('✅ [UPDATE SPEC] OpenAPI structure validated');
     } catch (validationError) {
+      console.log('❌ [UPDATE SPEC] Validation failed:', validationError.message);
       return res.status(400).json({
         success: false,
         error: 'Invalid OpenAPI specification',
@@ -579,14 +593,28 @@ router.put('/:id/spec', verifyToken, requireAPIAccess('editor'), async (req, res
 
     if (version && version !== req.api.currentVersion) {
       // Create new version
+      console.log('🔧 [UPDATE SPEC] Creating new version:', version);
       await req.api.addVersion(version, spec, changelog, req.user._id);
     } else {
       // Update current version
+      console.log('🔧 [UPDATE SPEC] Updating current version:', req.api.currentVersion);
       const currentVersionIndex = req.api.versions.findIndex(v => v.version === req.api.currentVersion);
       if (currentVersionIndex !== -1) {
         req.api.versions[currentVersionIndex].openApiSpec = spec;
         req.api.versions[currentVersionIndex].changelog = changelog || 'Specification updated';
+        
+        console.log('🔧 [UPDATE SPEC] Updated version data:', {
+          versionIndex: currentVersionIndex,
+          version: req.api.versions[currentVersionIndex].version,
+          specKeys: Object.keys(req.api.versions[currentVersionIndex].openApiSpec),
+          hasComponents: !!req.api.versions[currentVersionIndex].openApiSpec.components,
+          schemasInUpdatedSpec: req.api.versions[currentVersionIndex].openApiSpec.components?.schemas ? Object.keys(req.api.versions[currentVersionIndex].openApiSpec.components.schemas) : null
+        });
+        
         await req.api.save();
+        console.log('✅ [UPDATE SPEC] API saved successfully');
+      } else {
+        console.log('❌ [UPDATE SPEC] Current version not found in versions array');
       }
     }
 

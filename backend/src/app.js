@@ -60,10 +60,46 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://bian-api-frontend.onrender.com', 'https://bian-gtc.onrender.com']
-    : ['http://localhost:3000', 'http://localhost:5173'],
-  credentials: true
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = process.env.NODE_ENV === 'production' 
+      ? [
+          'https://bian-api-frontend.onrender.com', 
+          'https://bian-gtc.onrender.com'
+        ]
+      : [
+          'http://localhost:3000', 
+          'http://localhost:5173',
+          'http://localhost:3001',
+          'http://127.0.0.1:3000',
+          'http://127.0.0.1:5173'
+        ];
+    
+    // In production, also allow any onrender.com subdomain
+    const isAllowed = allowedOrigins.includes(origin) || 
+      (process.env.NODE_ENV === 'production' && origin.endsWith('.onrender.com'));
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.log('🚫 CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Origin',
+    'X-Requested-With',
+    'Content-Type',
+    'Accept',
+    'Authorization',
+    'Cache-Control',
+    'Pragma'
+  ],
+  optionsSuccessStatus: 200
 }));
 
 app.use(compression());

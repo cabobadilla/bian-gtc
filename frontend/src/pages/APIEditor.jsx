@@ -180,6 +180,8 @@ const APIEditor = () => {
 
   const handleSchemaCreate = () => {
     if (newSchemaName.trim()) {
+      console.log('🔧 [API EDITOR] Creating new schema:', newSchemaName);
+      
       const newSchema = {
         type: 'object',
         properties: {
@@ -196,6 +198,8 @@ const APIEditor = () => {
         [newSchemaName]: newSchema
       };
       
+      console.log('🔧 [API EDITOR] Updated schemas:', Object.keys(updatedSchemas));
+      
       setSchemas(updatedSchemas);
       updateSpecWithSchemas(updatedSchemas);
       setNewSchemaName('');
@@ -204,12 +208,19 @@ const APIEditor = () => {
   };
 
   const handleSchemaSave = () => {
+    console.log('🔧 [API EDITOR] Saving schema:', selectedSchema);
+    console.log('🔧 [API EDITOR] Schema content length:', editingSchema?.length || 0);
+    
     try {
       const updatedSchema = JSON.parse(editingSchema);
+      console.log('🔧 [API EDITOR] Parsed schema keys:', Object.keys(updatedSchema));
+      
       const updatedSchemas = {
         ...schemas,
         [selectedSchema]: updatedSchema
       };
+      
+      console.log('🔧 [API EDITOR] All schemas after update:', Object.keys(updatedSchemas));
       
       setSchemas(updatedSchemas);
       updateSpecWithSchemas(updatedSchemas);
@@ -217,6 +228,7 @@ const APIEditor = () => {
       setUnsavedChanges(true);
       toast.success('Schema actualizado');
     } catch (error) {
+      console.error('❌ [API EDITOR] Schema JSON parse error:', error);
       toast.error('JSON inválido en el schema');
     }
   };
@@ -232,13 +244,21 @@ const APIEditor = () => {
   };
 
   const updateSpecWithSchemas = (updatedSchemas) => {
+    console.log('🔧 [API EDITOR] Updating spec with schemas:', Object.keys(updatedSchemas));
+    console.log('🔧 [API EDITOR] Current spec data length before update:', specData.length);
+    
     try {
       const spec = JSON.parse(specData);
       if (!spec.components) spec.components = {};
       spec.components.schemas = updatedSchemas;
-      setSpecData(JSON.stringify(spec, null, 2));
+      
+      const updatedSpecData = JSON.stringify(spec, null, 2);
+      console.log('🔧 [API EDITOR] Updated spec data length:', updatedSpecData.length);
+      console.log('🔧 [API EDITOR] Schemas in updated spec:', Object.keys(spec.components.schemas));
+      
+      setSpecData(updatedSpecData);
     } catch (error) {
-      console.error('Error updating spec with schemas:', error);
+      console.error('❌ [API EDITOR] Error updating spec with schemas:', error);
     }
   };
 
@@ -329,13 +349,23 @@ const APIEditor = () => {
 
   // Save specification
   const handleSaveSpec = () => {
+    console.log('🔧 [API EDITOR] Attempting to save specification');
+    console.log('🔧 [API EDITOR] Current spec data length:', specData.length);
+    
     try {
       const spec = JSON.parse(specData);
+      console.log('🔧 [API EDITOR] Parsed spec keys:', Object.keys(spec));
+      console.log('🔧 [API EDITOR] Has components:', !!spec.components);
+      console.log('🔧 [API EDITOR] Has schemas:', !!(spec.components?.schemas));
+      console.log('🔧 [API EDITOR] Schemas count:', spec.components?.schemas ? Object.keys(spec.components.schemas).length : 0);
+      console.log('🔧 [API EDITOR] Schema names:', spec.components?.schemas ? Object.keys(spec.components.schemas) : []);
+      
       updateSpecMutation.mutate({
         spec,
         changelog: 'Especificación actualizada desde el editor'
       });
     } catch (error) {
+      console.error('❌ [API EDITOR] JSON parse error:', error);
       toast.error('JSON inválido. Por favor corrige los errores antes de guardar.');
     }
   };
