@@ -992,11 +992,23 @@ const APIEditor = () => {
                     <Grid item xs={12} md={6} key={schemaName}>
                       <Card variant="outlined">
                         <CardContent>
-                          <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
-                            <Typography variant="h6" color="primary">
+                          <Box mb={2}>
+                            {/* Schema name with word wrapping */}
+                            <Typography 
+                              variant="h6" 
+                              color="primary"
+                              sx={{ 
+                                wordBreak: 'break-word',
+                                lineHeight: 1.2,
+                                mb: 1,
+                                maxWidth: '100%'
+                              }}
+                            >
                               {schemaName}
                             </Typography>
-                            <Box display="flex" gap={1}>
+                            
+                            {/* Action buttons in a separate row */}
+                            <Box display="flex" gap={1} flexWrap="wrap">
                               <Button
                                 size="small"
                                 variant="outlined"
