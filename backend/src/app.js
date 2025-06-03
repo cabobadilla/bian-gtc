@@ -64,7 +64,10 @@ app.use(helmet({
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      console.log('✅ [CORS] Allowing request with no origin');
+      return callback(null, true);
+    }
     
     const allowedOrigins = process.env.NODE_ENV === 'production' 
       ? [
@@ -80,18 +83,26 @@ app.use(cors({
           'http://127.0.0.1:5173'
         ];
     
-    // In production, also allow any onrender.com subdomain
-    const isAllowed = allowedOrigins.includes(origin) || 
-      (process.env.NODE_ENV === 'production' && origin.endsWith('.onrender.com'));
+    // Enhanced logging for CORS debugging
+    console.log('🔍 [CORS] Checking origin:', origin);
+    console.log('📝 [CORS] Allowed origins:', allowedOrigins);
+    console.log('🌍 [CORS] Environment:', process.env.NODE_ENV);
     
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.log('🚫 CORS blocked origin:', origin);
-      console.log('📝 Allowed origins:', allowedOrigins);
-      console.log('🌍 Environment:', process.env.NODE_ENV);
-      callback(new Error('Not allowed by CORS'));
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      console.log('✅ [CORS] Origin explicitly allowed');
+      return callback(null, true);
     }
+    
+    // In production, also allow any onrender.com subdomain
+    if (process.env.NODE_ENV === 'production' && origin.endsWith('.onrender.com')) {
+      console.log('✅ [CORS] Origin allowed as onrender.com subdomain');
+      return callback(null, true);
+    }
+    
+    // Block the request
+    console.log('🚫 [CORS] Origin blocked');
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -104,7 +115,9 @@ app.use(cors({
     'Cache-Control',
     'Pragma'
   ],
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  // Add preflight handling
+  preflightContinue: false
 }));
 
 app.use(compression());
