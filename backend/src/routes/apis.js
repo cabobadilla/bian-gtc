@@ -632,4 +632,67 @@ router.put('/:id/spec', verifyToken, requireAPIAccess('editor'), async (req, res
   }
 });
 
+/**
+ * @swagger
+ * /api/apis/{id}:
+ *   delete:
+ *     summary: Delete an API
+ *     tags: [APIs]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: API deleted successfully
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: API not found
+ */
+router.delete('/:id', verifyToken, requireAPIAccess('owner'), async (req, res) => {
+  try {
+    console.log('🔧 [DELETE API] Request received for API:', req.params.id);
+    console.log('🔧 [DELETE API] User:', req.user._id);
+    console.log('🔧 [DELETE API] API owner:', req.api.createdBy);
+
+    // Additional authorization check - only the creator can delete
+    if (req.api.createdBy.toString() !== req.user._id.toString()) {
+      console.log('❌ [DELETE API] Access denied - not the creator');
+      return res.status(403).json({
+        success: false,
+        error: 'Only the API creator can delete this API'
+      });
+    }
+
+    // Soft delete: mark as inactive instead of permanently deleting
+    req.api.isActive = false;
+    req.api.deletedAt = new Date();
+    req.api.deletedBy = req.user._id;
+    await req.api.save();
+
+    console.log('✅ [DELETE API] API soft deleted successfully:', {
+      apiId: req.api._id,
+      name: req.api.name,
+      deletedAt: req.api.deletedAt
+    });
+
+    res.json({
+      success: true,
+      message: 'API deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ [DELETE API] Error deleting API:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete API'
+    });
+  }
+});
+
 module.exports = router; 

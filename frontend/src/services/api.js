@@ -131,6 +131,10 @@ export const apiService = {
   updateAPI: (id, data) => api.put(`/apis/${id}`, data),
   updateAPISpec: (id, data) => api.put(`/apis/${id}/spec`, data),
   enrichAPI: (id, data) => api.post(`/apis/${id}/enrich`, data),
+  deleteAPI: (id) => {
+    if (isDebug) console.log('🗑️ [API SERVICE] Deleting API:', id)
+    return api.delete(`/apis/${id}`)
+  },
 }
 
 // BIAN Reference services

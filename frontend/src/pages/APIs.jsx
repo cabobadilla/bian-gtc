@@ -20,7 +20,12 @@ import {
   InputLabel,
   Select,
   Tabs,
-  Tab
+  Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -34,18 +39,20 @@ import {
   Business as BusinessIcon,
   Lock as LockIcon
 } from '@mui/icons-material';
-import { useQuery } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { apiService, companyService } from '../services/api';
 import toast from 'react-hot-toast';
 
 const APIs = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [tabValue, setTabValue] = useState(0);
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedAPI, setSelectedAPI] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Get user's companies
   const { data: companiesData } = useQuery(
@@ -99,6 +106,24 @@ const APIs = () => {
 
   const apis = apisData?.data?.apis || [];
 
+  // Delete API mutation
+  const deleteAPIMutation = useMutation({
+    mutationFn: (apiId) => apiService.deleteAPI(apiId),
+    onSuccess: () => {
+      toast.success('API eliminada exitosamente');
+      setDeleteDialogOpen(false);
+      setSelectedAPI(null);
+      // Invalidate and refetch APIs
+      queryClient.invalidateQueries(['user-apis']);
+      refetch();
+    },
+    onError: (error) => {
+      console.error('Delete API error:', error);
+      toast.error(error.response?.data?.error || 'Error eliminando la API');
+      setDeleteDialogOpen(false);
+    }
+  });
+
   // Filter APIs by search term
   const filteredAPIs = apis.filter(api =>
     api.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -124,6 +149,18 @@ const APIs = () => {
   const handleEditAPI = (api) => {
     navigate(`/apis/${api._id}/edit`);
     handleMenuClose();
+  };
+
+  const handleDeleteAPI = (api) => {
+    setSelectedAPI(api);
+    setDeleteDialogOpen(true);
+    handleMenuClose();
+  };
+
+  const confirmDeleteAPI = () => {
+    if (selectedAPI) {
+      deleteAPIMutation.mutate(selectedAPI._id);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -369,11 +406,46 @@ const APIs = () => {
           <EditIcon sx={{ mr: 1 }} />
           Editar
         </MenuItem>
-        <MenuItem onClick={handleMenuClose}>
+        <MenuItem onClick={() => handleDeleteAPI(selectedAPI)}>
           <DeleteIcon sx={{ mr: 1 }} />
           Eliminar
         </MenuItem>
       </Menu>
+
+      {/* Delete Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">
+          {"Eliminar API"}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            ¿Estás seguro de que quieres eliminar la API "{selectedAPI?.name}"? 
+            Esta acción no se puede deshacer y se perderán todos los datos asociados.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setDeleteDialogOpen(false)}
+            disabled={deleteAPIMutation.isLoading}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            onClick={confirmDeleteAPI} 
+            color="error"
+            variant="contained"
+            disabled={deleteAPIMutation.isLoading}
+            autoFocus
+          >
+            {deleteAPIMutation.isLoading ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
