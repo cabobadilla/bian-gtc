@@ -102,6 +102,12 @@ app.use(cors({
       return callback(null, true);
     }
     
+    // Temporary: Allow all origins in production for debugging
+    if (process.env.NODE_ENV === 'production') {
+      console.log('🚨 [CORS] TEMPORARY: Allowing all origins in production for debugging');
+      return callback(null, true);
+    }
+    
     // Block the request
     console.log('🚫 [CORS] Origin blocked - not in allowed list');
     console.log('🚫 [CORS] Blocked origin:', origin);
@@ -117,22 +123,43 @@ app.use(cors({
     'Accept',
     'Authorization',
     'Cache-Control',
-    'Pragma'
+    'Pragma',
+    'X-CSRF-Token',
+    'X-Requested-With'
+  ],
+  exposedHeaders: [
+    'Content-Length',
+    'X-Kuma-Revision'
   ],
   optionsSuccessStatus: 200,
   // Ensure preflight requests are handled properly
-  preflightContinue: false
+  preflightContinue: false,
+  maxAge: 86400 // 24 hours
 }));
 
 // Add specific logging for preflight OPTIONS requests
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') {
+    console.log('🔄 [PREFLIGHT] =====================================');
     console.log('🔄 [PREFLIGHT] OPTIONS request received');
     console.log('🔄 [PREFLIGHT] Origin:', req.headers.origin);
     console.log('🔄 [PREFLIGHT] Method:', req.headers['access-control-request-method']);
     console.log('🔄 [PREFLIGHT] Headers:', req.headers['access-control-request-headers']);
     console.log('🔄 [PREFLIGHT] Path:', req.path);
+    console.log('🔄 [PREFLIGHT] Full URL:', req.originalUrl);
+    console.log('🔄 [PREFLIGHT] User-Agent:', req.headers['user-agent']);
+    console.log('🔄 [PREFLIGHT] =====================================');
   }
+  
+  // Special handling for API routes that are having CORS issues
+  if (req.path.startsWith('/api/apis/') && req.path.match(/^\/api\/apis\/[a-f0-9]{24}$/)) {
+    console.log('🎯 [API ROUTE] Specific API route accessed');
+    console.log('🎯 [API ROUTE] Method:', req.method);
+    console.log('🎯 [API ROUTE] Path:', req.path);
+    console.log('🎯 [API ROUTE] Origin:', req.headers.origin);
+    console.log('🎯 [API ROUTE] Authorization:', req.headers.authorization ? 'Present' : 'Missing');
+  }
+  
   next();
 });
 
@@ -234,6 +261,28 @@ app.post('/api/cors-test', (req, res) => {
     message: 'CORS POST test successful',
     timestamp: new Date().toISOString()
   });
+});
+
+// Special middleware for API routes with CORS issues
+app.use('/api/apis/:id', (req, res, next) => {
+  console.log('🔧 [API MIDDLEWARE] Request to API route');
+  console.log('🔧 [API MIDDLEWARE] Method:', req.method);
+  console.log('🔧 [API MIDDLEWARE] Path:', req.path);
+  console.log('🔧 [API MIDDLEWARE] Params:', req.params);
+  console.log('🔧 [API MIDDLEWARE] Origin:', req.headers.origin);
+  
+  // Explicitly handle OPTIONS for this route
+  if (req.method === 'OPTIONS') {
+    console.log('🔧 [API MIDDLEWARE] Handling OPTIONS request explicitly');
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '86400');
+    return res.status(200).end();
+  }
+  
+  next();
 });
 
 // Routes
