@@ -507,13 +507,29 @@ const APIEditor = () => {
       
       // Auto-save the spec to backend when schemas are modified
       console.log('🔧 [API EDITOR] Auto-saving spec with schemas to backend');
+      console.log('🔧 [API EDITOR] Spec object being sent:', {
+        hasComponents: !!spec.components,
+        hasSchemas: !!spec.components?.schemas,
+        schemaCount: Object.keys(spec.components?.schemas || {}).length,
+        schemaNames: Object.keys(spec.components?.schemas || {})
+      });
+      
       updateSpecMutation.mutate({
         spec,
         changelog: 'Schemas actualizados automáticamente'
+      }, {
+        onSuccess: () => {
+          console.log('✅ [API EDITOR] Auto-save successful');
+        },
+        onError: (error) => {
+          console.error('❌ [API EDITOR] Auto-save failed:', error);
+          toast.error('Error guardando schemas automáticamente. Guarda manualmente en la pestaña de Especificación.');
+        }
       });
       
     } catch (error) {
       console.error('❌ [API EDITOR] Error updating spec with schemas:', error);
+      toast.error('Error procesando schemas. Verifica el formato JSON.');
     }
   };
 
