@@ -17,7 +17,7 @@ import {
   Circle as CircleIcon,
   Warning as WarningIcon 
 } from '@mui/icons-material'
-import { useAuthStore } from '../../stores/authStore'
+import { useAuthStore } from '../../store/authStore'
 import { useQuery } from 'react-query'
 import axios from 'axios'
 
