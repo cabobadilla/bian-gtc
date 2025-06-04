@@ -2,7 +2,7 @@ import axios from 'axios'
 import toast from 'react-hot-toast'
 
 // Get backend URL - auto-detect based on architecture
-const getAPIUrl = () => {
+export const getAPIUrl = () => {
   // In development, use explicit env var or localhost fallback
   if (import.meta.env.DEV) {
     return import.meta.env.VITE_API_URL || 'http://localhost:10000/api'

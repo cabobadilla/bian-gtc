@@ -20,6 +20,7 @@ import {
 import { useAuthStore } from '../../store/authStore'
 import { useQuery } from 'react-query'
 import axios from 'axios'
+import { getAPIUrl } from '../../services/api'
 
 // Server status component
 const ServerStatus = () => {
@@ -29,33 +30,6 @@ const ServerStatus = () => {
   const { data: healthData, error: healthError, isLoading } = useQuery(
     'server-health',
     async () => {
-      // Get the same base URL as the main API
-      const getAPIUrl = () => {
-        if (import.meta.env.DEV) {
-          return import.meta.env.VITE_API_URL || 'http://localhost:10000/api'
-        }
-        
-        if (import.meta.env.VITE_API_URL) {
-          return import.meta.env.VITE_API_URL
-        }
-        
-        if (import.meta.env.PROD) {
-          const currentHost = window.location.hostname
-          
-          if (currentHost === 'bian-gtc.onrender.com') {
-            return 'https://bian-api-backend.onrender.com/api'
-          }
-          
-          if (currentHost === 'bian-api-frontend.onrender.com') {
-            return 'https://bian-api-backend.onrender.com/api'
-          }
-          
-          return `${window.location.origin}/api`
-        }
-        
-        return 'http://localhost:10000/api'
-      }
-      
       const baseURL = getAPIUrl()
       const response = await axios.get(`${baseURL}/health`, {
         timeout: 5000 // 5 second timeout for health check

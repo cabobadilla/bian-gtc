@@ -1,13 +1,14 @@
 import React from 'react'
 import { Box, Container, Card, CardContent, Typography, Button } from '@mui/material'
 import { Google as GoogleIcon } from '@mui/icons-material'
-
-// Get backend URL from environment variable (with fallback for development)
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
+import { getAPIUrl } from '../services/api'
 
 const Login = () => {
   const handleGoogleLogin = () => {
-    window.location.href = `${API_URL}/api/auth/google`
+    // getAPIUrl() already includes /api, so just add /auth/google
+    const googleAuthUrl = `${getAPIUrl()}/auth/google`
+    console.log('🔗 [LOGIN] Redirecting to Google auth:', googleAuthUrl)
+    window.location.href = googleAuthUrl
   }
 
   return (
