@@ -13,7 +13,8 @@ import {
   ListItemIcon,
   ListItemText,
   Chip,
-  Paper
+  Paper,
+  CircularProgress
 } from '@mui/material'
 import { 
   Api, 
@@ -37,14 +38,66 @@ const Dashboard = () => {
     userService.getDashboard
   )
 
-  const { data: companiesData } = useQuery(
+  const { data: companiesData, isLoading: companiesLoading, error: companiesError } = useQuery(
     'my-companies',
-    companyService.getMyCompanies
+    companyService.getMyCompanies,
+    {
+      retry: 3,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      onError: (error) => {
+        console.error('❌ [DASHBOARD] Failed to load companies:', error);
+      }
+    }
   )
 
   const stats = dashboardData?.data?.stats || {}
   const companies = companiesData?.data?.companies || []
   const hasCompanies = companies.length > 0
+
+  // Show loading state while companies are loading
+  if (companiesLoading) {
+    return (
+      <Container maxWidth="lg">
+        <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="50vh">
+          <CircularProgress size={40} sx={{ mb: 2 }} />
+          <Typography variant="h6" gutterBottom>
+            Cargando dashboard...
+          </Typography>
+          <Typography variant="body2" color="text.secondary" textAlign="center">
+            Si esto tarda mucho, el servidor puede estar iniciando.
+            <br />
+            Por favor espera unos segundos.
+          </Typography>
+        </Box>
+      </Container>
+    );
+  }
+
+  // Show error state if companies failed to load
+  if (companiesError) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          <Typography variant="h6" gutterBottom>
+            Error cargando el dashboard
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            {companiesError.code === 'ECONNABORTED' || companiesError.code === 'ERR_NETWORK' 
+              ? 'El servidor está iniciando o no responde. Intenta de nuevo en unos segundos.'
+              : companiesError.response?.data?.error || companiesError.message || 'Error desconocido'
+            }
+          </Typography>
+          <Button 
+            variant="contained" 
+            onClick={() => window.location.reload()}
+            sx={{ mr: 2 }}
+          >
+            Reintentar
+          </Button>
+        </Alert>
+      </Container>
+    );
+  }
 
   const nextSteps = [
     {

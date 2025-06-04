@@ -179,21 +179,21 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Health check endpoint
+// Health check endpoint (before auth routes)
 app.get('/api/health', (req, res) => {
   res.json({
-    status: 'OK',
+    status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
-    environment: process.env.NODE_ENV
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/apis', apiRoutes);
-app.use('/api/users', userRoutes);
 app.use('/api/bian', bianReferenceRoutes);
 
 // Serve static files from the frontend build in production

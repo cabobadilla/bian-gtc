@@ -1,7 +1,140 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Box, AppBar, Toolbar, Typography, Button, Avatar, Tabs, Tab } from '@mui/material'
-import { useAuthStore } from '../../store/authStore'
+import { 
+  Box, 
+  AppBar, 
+  Toolbar, 
+  Typography, 
+  Button, 
+  Avatar, 
+  Tabs, 
+  Tab,
+  Chip,
+  Tooltip,
+  CircularProgress
+} from '@mui/material'
+import { 
+  Circle as CircleIcon,
+  Warning as WarningIcon 
+} from '@mui/icons-material'
+import { useAuthStore } from '../../stores/authStore'
+import { useQuery } from 'react-query'
+import axios from 'axios'
+
+// Server status component
+const ServerStatus = () => {
+  const [status, setStatus] = useState('checking') // 'online', 'offline', 'checking'
+  
+  // Health check query
+  const { data: healthData, error: healthError, isLoading } = useQuery(
+    'server-health',
+    async () => {
+      // Get the same base URL as the main API
+      const getAPIUrl = () => {
+        if (import.meta.env.DEV) {
+          return import.meta.env.VITE_API_URL || 'http://localhost:10000/api'
+        }
+        
+        if (import.meta.env.VITE_API_URL) {
+          return import.meta.env.VITE_API_URL
+        }
+        
+        if (import.meta.env.PROD) {
+          const currentHost = window.location.hostname
+          
+          if (currentHost === 'bian-gtc.onrender.com') {
+            return 'https://bian-api-backend.onrender.com/api'
+          }
+          
+          if (currentHost === 'bian-api-frontend.onrender.com') {
+            return 'https://bian-api-backend.onrender.com/api'
+          }
+          
+          return `${window.location.origin}/api`
+        }
+        
+        return 'http://localhost:10000/api'
+      }
+      
+      const baseURL = getAPIUrl()
+      const response = await axios.get(`${baseURL}/health`, {
+        timeout: 5000 // 5 second timeout for health check
+      })
+      return response.data
+    },
+    {
+      refetchInterval: 30000, // Check every 30 seconds
+      retry: 2,
+      retryDelay: 1000,
+      onSuccess: () => {
+        setStatus('online')
+      },
+      onError: (error) => {
+        console.log('❌ [SERVER STATUS] Health check failed:', error.message)
+        setStatus('offline')
+      }
+    }
+  )
+
+  useEffect(() => {
+    if (isLoading) {
+      setStatus('checking')
+    } else if (healthError) {
+      setStatus('offline')
+    } else if (healthData) {
+      setStatus('online')
+    }
+  }, [isLoading, healthError, healthData])
+
+  const getStatusConfig = () => {
+    switch (status) {
+      case 'online':
+        return {
+          color: '#4caf50',
+          text: 'Servidor Online',
+          icon: <CircleIcon sx={{ fontSize: 12, color: '#4caf50' }} />
+        }
+      case 'offline':
+        return {
+          color: '#f44336',
+          text: 'Servidor Offline',
+          icon: <CircleIcon sx={{ fontSize: 12, color: '#f44336' }} />
+        }
+      case 'checking':
+        return {
+          color: '#ff9800',
+          text: 'Verificando...',
+          icon: <CircularProgress size={12} sx={{ color: '#ff9800' }} />
+        }
+      default:
+        return {
+          color: '#9e9e9e',
+          text: 'Estado Desconocido',
+          icon: <WarningIcon sx={{ fontSize: 12, color: '#9e9e9e' }} />
+        }
+    }
+  }
+
+  const statusConfig = getStatusConfig()
+
+  return (
+    <Tooltip title={`${statusConfig.text}${healthData ? ` • Uptime: ${Math.floor(healthData.uptime / 60)}m` : ''}`}>
+      <Chip
+        icon={statusConfig.icon}
+        label={statusConfig.text}
+        size="small"
+        variant="outlined"
+        sx={{
+          borderColor: statusConfig.color,
+          color: statusConfig.color,
+          '& .MuiChip-icon': {
+            color: statusConfig.color
+          }
+        }}
+      />
+    </Tooltip>
+  )
+}
 
 const Layout = () => {
   const { user, logout } = useAuthStore()
@@ -29,6 +162,7 @@ const Layout = () => {
           
           {user && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <ServerStatus />
               <Avatar
                 src={user.avatar}
                 alt={user.name}

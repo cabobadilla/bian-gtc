@@ -61,11 +61,56 @@ console.log('🔧 Vite API URL Env:', import.meta.env.VITE_API_URL)
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 45000, // Increased timeout for API operations
+  timeout: 60000, // Increased to 60 seconds for Render cold starts
   headers: {
     'Content-Type': 'application/json',
   },
 })
+
+// Helper function to check if error is likely due to cold start
+const isColdStartError = (error) => {
+  return (
+    error.code === 'ECONNABORTED' || 
+    error.code === 'ERR_NETWORK' ||
+    error.code === 'ECONNREFUSED' ||
+    (error.response?.status >= 500 && error.response?.status < 600)
+  )
+}
+
+// Helper function to create retry wrapper
+const withRetry = async (apiCall, maxRetries = 2, delay = 3000) => {
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      return await apiCall()
+    } catch (error) {
+      const isLastAttempt = attempt === maxRetries + 1
+      const shouldRetry = isColdStartError(error) && !isLastAttempt
+      
+      if (shouldRetry) {
+        console.log(`🔄 [RETRY] Attempt ${attempt} failed, retrying in ${delay}ms...`, {
+          error: error.message,
+          code: error.code,
+          status: error.response?.status
+        })
+        
+        // Show user-friendly message on first retry
+        if (attempt === 1) {
+          toast.loading('El servidor está iniciando, por favor espera...', {
+            id: 'cold-start',
+            duration: delay + 2000
+          })
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, delay))
+        delay *= 1.5 // Exponential backoff
+      } else {
+        // Clear any loading toast
+        toast.dismiss('cold-start')
+        throw error
+      }
+    }
+  }
+}
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
@@ -108,6 +153,9 @@ api.interceptors.request.use(
 // Response interceptor to handle errors
 api.interceptors.response.use(
   (response) => {
+    // Clear any cold start loading toast on successful response
+    toast.dismiss('cold-start')
+    
     if (isDebug) {
       console.log(`✅ [API RESPONSE] ${response.config.method?.toUpperCase()} ${response.config.baseURL}${response.config.url}`, {
         status: response.status,
@@ -117,6 +165,9 @@ api.interceptors.response.use(
     return response
   },
   (error) => {
+    // Clear any cold start loading toast
+    toast.dismiss('cold-start')
+    
     console.error(`❌ [API ERROR] ${error.config?.method?.toUpperCase()} ${error.config?.baseURL}${error.config?.url}`, {
       status: error.response?.status,
       data: error.response?.data,
@@ -135,11 +186,15 @@ api.interceptors.response.use(
     } else if (error.response?.status === 404) {
       toast.error(`Endpoint not found: ${error.config?.url}`)
     } else if (error.response?.status >= 500) {
-      toast.error('Server error. Please try again later.')
+      if (isColdStartError(error)) {
+        toast.error('El servidor está iniciando. Intenta de nuevo en unos segundos.')
+      } else {
+        toast.error('Server error. Please try again later.')
+      }
     } else if (error.code === 'ECONNABORTED') {
-      toast.error('Request timeout. Please try again.')
-    } else if (error.code === 'ERR_NETWORK') {
-      toast.error('Network error. Please check your connection.')
+      toast.error('El servidor está tardando en responder. Puede estar iniciando, intenta de nuevo.')
+    } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+      toast.error('No se puede conectar al servidor. Puede estar iniciando, intenta de nuevo en unos segundos.')
     }
     
     return Promise.reject(error)
@@ -153,19 +208,19 @@ export const authService = {
   updateProfile: (data) => api.put('/auth/profile', data),
 }
 
-// Company services
+// Company services with retry logic
 export const companyService = {
   getMyCompanies: () => {
     if (isDebug) console.log('🏢 [COMPANY SERVICE] Getting my companies...')
-    return api.get('/companies/my')
+    return withRetry(() => api.get('/companies/my'))
   },
   getCompany: (id) => {
     if (isDebug) console.log('🏢 [COMPANY SERVICE] Getting company:', id)
-    return api.get(`/companies/${id}`)
+    return withRetry(() => api.get(`/companies/${id}`))
   },
   createCompany: (data) => {
     if (isDebug) console.log('🏢 [COMPANY SERVICE] Creating company:', data)
-    return api.post('/companies', data)
+    return withRetry(() => api.post('/companies', data))
   },
 }
 
