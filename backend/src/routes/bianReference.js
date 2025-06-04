@@ -146,16 +146,31 @@ router.get('/search', verifyToken, async (req, res) => {
  */
 router.post('/intelligent-search', verifyToken, async (req, res) => {
   try {
+    // Add specific logging for this endpoint
+    console.log('🤖 [INTELLIGENT SEARCH] =====================================');
+    console.log('🤖 [INTELLIGENT SEARCH] Request received');
+    console.log('🤖 [INTELLIGENT SEARCH] Origin:', req.headers.origin);
+    console.log('🤖 [INTELLIGENT SEARCH] Method:', req.method);
+    console.log('🤖 [INTELLIGENT SEARCH] Headers:', {
+      origin: req.headers.origin,
+      'content-type': req.headers['content-type'],
+      authorization: req.headers.authorization ? 'Bearer [PRESENT]' : 'None',
+      'access-control-request-method': req.headers['access-control-request-method'],
+      'access-control-request-headers': req.headers['access-control-request-headers']
+    });
+    console.log('🤖 [INTELLIGENT SEARCH] =====================================');
+
     const { query, language = 'es', context = {} } = req.body;
 
     if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      console.log('❌ [INTELLIGENT SEARCH] Invalid query:', query);
       return res.status(400).json({
         success: false,
         error: 'Query is required for intelligent search'
       });
     }
 
-    const isDebug = process.env.NODE_ENV === 'development';
+    const isDebug = process.env.NODE_ENV === 'development' || process.env.DEBUG === 'ON';
     
     if (isDebug) {
       console.log('🤖 [INTELLIGENT SEARCH] Processing request:', {
@@ -172,6 +187,8 @@ router.post('/intelligent-search', verifyToken, async (req, res) => {
       includeInterpretation: true,
       includeRecommendations: true
     });
+
+    console.log('✅ [INTELLIGENT SEARCH] Response ready, sending to client');
 
     res.json({
       success: true,

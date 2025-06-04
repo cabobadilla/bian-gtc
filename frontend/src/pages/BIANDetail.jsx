@@ -117,6 +117,22 @@ const BIANDetail = () => {
 
   const companies = companiesData?.data?.companies || [];
 
+  // Debug logging for wizard state changes
+  useEffect(() => {
+    if (activeStep === 3) { // Step 4 (AI Suggestions) - 0-indexed
+      console.log('📊 [WIZARD STATE] Step 4 (AI Suggestions) state update:');
+      console.log('📊 [WIZARD STATE] - Has suggestions:', !!wizardData.aiSuggestions);
+      console.log('📊 [WIZARD STATE] - Loading suggestions:', wizardData.loadingAISuggestions);
+      console.log('📊 [WIZARD STATE] - Selected suggestion type:', wizardData.selectedSuggestionType);
+      console.log('📊 [WIZARD STATE] - Continue button enabled:', !!wizardData.selectedSuggestionType);
+      
+      if (wizardData.aiSuggestions) {
+        console.log('📊 [WIZARD STATE] - Available suggestion types:', 
+          wizardData.aiSuggestions.recommendations?.map(r => r.type));
+      }
+    }
+  }, [activeStep, wizardData.aiSuggestions, wizardData.loadingAISuggestions, wizardData.selectedSuggestionType]);
+
   // Get API details from location state or fetch from server
   const apiFromState = location.state?.api;
   
@@ -211,14 +227,69 @@ const BIANDetail = () => {
 
   // Wizard functions
   const handleWizardNext = () => {
+    console.log(`🔄 [WIZARD] Moving from step ${activeStep} to step ${activeStep + 1}`);
+    console.log(`🔄 [WIZARD] Current wizard data:`, {
+      step: activeStep,
+      companyId: wizardData.companyId,
+      name: wizardData.name,
+      customizationRequest: wizardData.customizationRequest?.substring(0, 50) + '...',
+      hasSuggestions: !!wizardData.aiSuggestions,
+      selectedSuggestionType: wizardData.selectedSuggestionType,
+      customFieldsCount: wizardData.customFields.length
+    });
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
   };
 
   const handleWizardBack = () => {
+    console.log(`🔄 [WIZARD] Moving back from step ${activeStep} to step ${activeStep - 1}`);
     setActiveStep((prevActiveStep) => prevActiveStep - 1);
   };
 
+  // Handler for AI suggestion selection
+  const handleSuggestionSelection = (suggestionType) => {
+    console.log('🎯 [SUGGESTION SELECTION] ============================');
+    console.log('🎯 [SUGGESTION SELECTION] User selected suggestion type:', suggestionType);
+    console.log('🎯 [SUGGESTION SELECTION] Previous selection:', wizardData.selectedSuggestionType);
+    console.log('🎯 [SUGGESTION SELECTION] Available suggestions:', wizardData.aiSuggestions?.recommendations?.map(r => r.type));
+    console.log('🎯 [SUGGESTION SELECTION] This should enable the Continue button');
+    console.log('🎯 [SUGGESTION SELECTION] ============================');
+    
+    setWizardData(prev => ({ ...prev, selectedSuggestionType: suggestionType }));
+  };
+
+  // Handler for continuing from AI suggestions step
+  const handleContinueFromSuggestions = () => {
+    console.log('🚀 [CONTINUE FROM SUGGESTIONS] ========================');
+    console.log('🚀 [CONTINUE FROM SUGGESTIONS] User clicked Continue button');
+    console.log('🚀 [CONTINUE FROM SUGGESTIONS] Selected suggestion type:', wizardData.selectedSuggestionType);
+    console.log('🚀 [CONTINUE FROM SUGGESTIONS] Current step:', activeStep);
+    console.log('🚀 [CONTINUE FROM SUGGESTIONS] Button should be enabled:', !!wizardData.selectedSuggestionType);
+    console.log('🚀 [CONTINUE FROM SUGGESTIONS] Calling handleWizardNext()');
+    console.log('🚀 [CONTINUE FROM SUGGESTIONS] ========================');
+    
+    handleWizardNext();
+  };
+
+  // Handler for opening wizard
+  const handleOpenWizard = () => {
+    console.log('🧙‍♂️ [WIZARD OPEN] =================================');
+    console.log('🧙‍♂️ [WIZARD OPEN] Opening API Creation Wizard');
+    console.log('🧙‍♂️ [WIZARD OPEN] API:', api.name);
+    console.log('🧙‍♂️ [WIZARD OPEN] Domain:', api.serviceDomain);
+    console.log('🧙‍♂️ [WIZARD OPEN] Available companies:', companies.length);
+    console.log('🧙‍♂️ [WIZARD OPEN] =================================');
+    
+    setWizardOpen(true);
+  };
+
   const resetWizard = () => {
+    console.log('🔄 [WIZARD RESET] Resetting wizard to initial state');
+    console.log('🔄 [WIZARD RESET] Previous state:', {
+      step: activeStep,
+      selectedSuggestionType: wizardData.selectedSuggestionType,
+      hasSuggestions: !!wizardData.aiSuggestions
+    });
+    
     setActiveStep(0);
     setWizardData({
       companyId: '',
@@ -235,6 +306,8 @@ const BIANDetail = () => {
       createdAPI: null,
       saving: false
     });
+    
+    console.log('✅ [WIZARD RESET] Reset completed');
   };
 
   // Step 2: Analyze API payloads
@@ -307,14 +380,22 @@ const BIANDetail = () => {
 
   // Step 4: Get AI suggestions
   const getAISuggestions = async () => {
+    console.log('🔍 [AI SUGGESTIONS] ===========================================');
+    console.log('🔍 [AI SUGGESTIONS] Starting AI suggestions request');
+    console.log('🔍 [AI SUGGESTIONS] customizationRequest:', wizardData.customizationRequest);
+    console.log('🔍 [AI SUGGESTIONS] ===========================================');
+    
     if (!wizardData.customizationRequest.trim()) {
+      console.log('❌ [AI SUGGESTIONS] No customization request provided');
       toast.error('Por favor describe qué datos necesitas agregar');
       return;
     }
 
+    console.log('⏳ [AI SUGGESTIONS] Setting loading state to true');
     setWizardData(prev => ({ ...prev, loadingAISuggestions: true }));
     
     try {
+      console.log('🚀 [AI SUGGESTIONS] Making API call to intelligentSearch');
       const response = await bianService.intelligentSearch({
         query: `Analiza esta API BIAN "${api.name}" del dominio "${api.serviceDomain}" y sugiere cómo agregar estos datos: "${wizardData.customizationRequest}". Necesito saber si debería ser un campo simple o un esquema complejo.`,
         language: 'es',
@@ -325,6 +406,9 @@ const BIANDetail = () => {
           originalOperations: api.serviceOperations?.map(op => op.name) || []
         }
       });
+
+      console.log('✅ [AI SUGGESTIONS] API call successful, response received');
+      console.log('📄 [AI SUGGESTIONS] Response data:', response.data);
 
       const suggestions = {
         analysis: response.data.interpretation,
@@ -346,17 +430,30 @@ const BIANDetail = () => {
         ]
       };
 
+      console.log('📝 [AI SUGGESTIONS] Constructed suggestions:', suggestions);
+      console.log('🔄 [AI SUGGESTIONS] Setting suggestions in wizard data');
+      
       setWizardData(prev => ({ 
         ...prev, 
         aiSuggestions: suggestions,
         loadingAISuggestions: false 
       }));
-      handleWizardNext();
+      
+      console.log('✅ [AI SUGGESTIONS] Suggestions successfully set in state');
+      console.log('🎯 [AI SUGGESTIONS] IMPORTANT: NOT calling handleWizardNext() - user must select option');
+      console.log('👤 [AI SUGGESTIONS] User should now see the suggestions and select one to continue');
+      console.log('🔍 [AI SUGGESTIONS] ===========================================');
 
     } catch (error) {
-      console.error('Error getting AI suggestions:', error);
+      console.error('❌ [AI SUGGESTIONS] Error getting AI suggestions:', error);
+      console.log('💥 [AI SUGGESTIONS] Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       toast.error('Error obteniendo sugerencias de IA');
       setWizardData(prev => ({ ...prev, loadingAISuggestions: false }));
+      console.log('🔍 [AI SUGGESTIONS] Error handling completed');
     }
   };
 
@@ -655,7 +752,7 @@ const BIANDetail = () => {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => setWizardOpen(true)}
+            onClick={handleOpenWizard}
             disabled={companies.length === 0}
           >
             Crear API
@@ -1192,17 +1289,19 @@ const BIANDetail = () => {
                   <Box>
                     <Alert severity="success" sx={{ mb: 3 }}>
                       <Typography variant="body2">
-                        <strong>Análisis completado:</strong> Hemos encontrado {wizardData.aiSuggestions.recommendations.length} opciones para implementar tu solicitud.
+                        <strong>✅ Análisis completado:</strong> Hemos encontrado {wizardData.aiSuggestions.recommendations.length} opciones para implementar tu solicitud.
+                        <br />
+                        <strong>👇 Selecciona una opción para continuar.</strong>
                       </Typography>
                     </Alert>
                     
                     <Typography variant="h6" gutterBottom>
-                      Selecciona el tipo de implementación:
+                      💡 Selecciona el tipo de implementación:
                     </Typography>
                     
                     <RadioGroup
                       value={wizardData.selectedSuggestionType}
-                      onChange={(e) => setWizardData(prev => ({ ...prev, selectedSuggestionType: e.target.value }))}
+                      onChange={(e) => handleSuggestionSelection(e.target.value)}
                     >
                       {wizardData.aiSuggestions.recommendations.map((recommendation) => (
                         <FormControlLabel
@@ -1210,7 +1309,24 @@ const BIANDetail = () => {
                           value={recommendation.type}
                           control={<Radio />}
                           label={
-                            <Card variant="outlined" sx={{ p: 2, mb: 1, width: '100%' }}>
+                            <Card 
+                              variant="outlined" 
+                              sx={{ 
+                                p: 2, 
+                                mb: 1, 
+                                width: '100%',
+                                transition: 'all 0.2s',
+                                '&:hover': {
+                                  bgcolor: 'action.hover',
+                                  borderColor: 'primary.main'
+                                },
+                                ...(wizardData.selectedSuggestionType === recommendation.type && {
+                                  bgcolor: 'primary.50',
+                                  borderColor: 'primary.main',
+                                  borderWidth: 2
+                                })
+                              }}
+                            >
                               <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                                 {recommendation.title}
                               </Typography>
@@ -1238,14 +1354,21 @@ const BIANDetail = () => {
                 )}
                 
                 <Box sx={{ mb: 2, mt: 3 }}>
-                  <Button
-                    variant="contained"
-                    onClick={handleWizardNext}
-                    disabled={!wizardData.selectedSuggestionType}
-                    sx={{ mr: 1 }}
+                  <Tooltip 
+                    title={!wizardData.selectedSuggestionType ? "Primero selecciona una de las opciones de implementación sugeridas arriba" : ""}
+                    arrow
                   >
-                    Continuar
-                  </Button>
+                    <span>
+                      <Button
+                        variant="contained"
+                        onClick={handleContinueFromSuggestions}
+                        disabled={!wizardData.selectedSuggestionType}
+                        sx={{ mr: 1 }}
+                      >
+                        {wizardData.selectedSuggestionType ? 'Continuar con la Opción Seleccionada' : 'Selecciona una Opción para Continuar'}
+                      </Button>
+                    </span>
+                  </Tooltip>
                   <Button onClick={handleWizardBack}>
                     Atrás
                   </Button>

@@ -84,9 +84,11 @@ app.use(cors({
         ];
     
     // Enhanced logging for CORS debugging
+    console.log('🔍 [CORS] ===========================================');
     console.log('🔍 [CORS] Checking origin:', origin);
     console.log('📝 [CORS] Allowed origins:', allowedOrigins);
     console.log('🌍 [CORS] Environment:', process.env.NODE_ENV);
+    console.log('🔍 [CORS] ===========================================');
     
     // Check if origin is in allowed list
     if (allowedOrigins.includes(origin)) {
@@ -101,8 +103,10 @@ app.use(cors({
     }
     
     // Block the request
-    console.log('🚫 [CORS] Origin blocked');
-    callback(new Error('Not allowed by CORS'));
+    console.log('🚫 [CORS] Origin blocked - not in allowed list');
+    console.log('🚫 [CORS] Blocked origin:', origin);
+    console.log('🚫 [CORS] Allowed origins were:', allowedOrigins);
+    callback(new Error(`CORS blocked origin: ${origin}`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -116,9 +120,21 @@ app.use(cors({
     'Pragma'
   ],
   optionsSuccessStatus: 200,
-  // Add preflight handling
+  // Ensure preflight requests are handled properly
   preflightContinue: false
 }));
+
+// Add specific logging for preflight OPTIONS requests
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    console.log('🔄 [PREFLIGHT] OPTIONS request received');
+    console.log('🔄 [PREFLIGHT] Origin:', req.headers.origin);
+    console.log('🔄 [PREFLIGHT] Method:', req.headers['access-control-request-method']);
+    console.log('🔄 [PREFLIGHT] Headers:', req.headers['access-control-request-headers']);
+    console.log('🔄 [PREFLIGHT] Path:', req.path);
+  }
+  next();
+});
 
 app.use(compression());
 
@@ -186,6 +202,37 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// CORS test endpoint (for debugging CORS issues)
+app.get('/api/cors-test', (req, res) => {
+  console.log('🔧 [CORS TEST] Request received');
+  console.log('🔧 [CORS TEST] Origin:', req.headers.origin);
+  console.log('🔧 [CORS TEST] Method:', req.method);
+  res.json({
+    success: true,
+    origin: req.headers.origin,
+    method: req.method,
+    message: 'CORS test successful',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// CORS test endpoint with POST (for debugging POST requests)
+app.post('/api/cors-test', (req, res) => {
+  console.log('🔧 [CORS TEST POST] Request received');
+  console.log('🔧 [CORS TEST POST] Origin:', req.headers.origin);
+  console.log('🔧 [CORS TEST POST] Method:', req.method);
+  console.log('🔧 [CORS TEST POST] Content-Type:', req.headers['content-type']);
+  res.json({
+    success: true,
+    origin: req.headers.origin,
+    method: req.method,
+    contentType: req.headers['content-type'],
+    body: req.body,
+    message: 'CORS POST test successful',
+    timestamp: new Date().toISOString()
   });
 });
 

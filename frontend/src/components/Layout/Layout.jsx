@@ -50,6 +50,30 @@ const ServerStatus = () => {
     }
   )
 
+  // CORS test function
+  const testCORS = async () => {
+    try {
+      const baseURL = getAPIUrl()
+      console.log('🔧 [CORS TEST] Testing CORS with baseURL:', baseURL)
+      
+      // Test GET request
+      const getResponse = await axios.get(`${baseURL}/cors-test`)
+      console.log('✅ [CORS TEST] GET request successful:', getResponse.data)
+      
+      // Test POST request
+      const postResponse = await axios.post(`${baseURL}/cors-test`, {
+        test: 'CORS test data',
+        timestamp: new Date().toISOString()
+      })
+      console.log('✅ [CORS TEST] POST request successful:', postResponse.data)
+      
+      alert('✅ CORS test successful! Check console for details.')
+    } catch (error) {
+      console.error('❌ [CORS TEST] CORS test failed:', error)
+      alert(`❌ CORS test failed: ${error.message}`)
+    }
+  }
+
   useEffect(() => {
     if (isLoading) {
       setStatus('checking')
@@ -92,21 +116,40 @@ const ServerStatus = () => {
   const statusConfig = getStatusConfig()
 
   return (
-    <Tooltip title={`${statusConfig.text}${healthData ? ` • Uptime: ${Math.floor(healthData.uptime / 60)}m` : ''}`}>
-      <Chip
-        icon={statusConfig.icon}
-        label={statusConfig.text}
-        size="small"
-        variant="outlined"
-        sx={{
-          borderColor: statusConfig.color,
-          color: statusConfig.color,
-          '& .MuiChip-icon': {
-            color: statusConfig.color
-          }
-        }}
-      />
-    </Tooltip>
+    <Box display="flex" alignItems="center" gap={1}>
+      <Tooltip title={`${statusConfig.text}${healthData ? ` • Uptime: ${Math.floor(healthData.uptime / 60)}m` : ''}`}>
+        <Chip
+          icon={statusConfig.icon}
+          label={statusConfig.text}
+          size="small"
+          variant="outlined"
+          sx={{
+            borderColor: statusConfig.color,
+            color: statusConfig.color,
+            '& .MuiChip-icon': {
+              color: statusConfig.color
+            }
+          }}
+        />
+      </Tooltip>
+      {/* CORS Test Button (only show in development or when server is offline) */}
+      {(import.meta.env.DEV || status === 'offline') && (
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={testCORS}
+          sx={{ 
+            color: 'white', 
+            borderColor: 'white',
+            minWidth: 'auto',
+            px: 1,
+            fontSize: '0.75rem'
+          }}
+        >
+          Test CORS
+        </Button>
+      )}
+    </Box>
   )
 }
 
