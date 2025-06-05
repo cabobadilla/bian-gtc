@@ -35,6 +35,10 @@ print_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
+print_info() {
+    echo -e "${BLUE}ℹ️  $1${NC}"
+}
+
 # Check if running in correct directory
 if [ ! -f "package.json" ] && [ ! -d "backend" ] && [ ! -d "frontend" ]; then
     print_error "Este script debe ejecutarse desde la raíz del proyecto bian-gtc"
