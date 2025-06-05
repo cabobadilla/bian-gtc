@@ -48,8 +48,20 @@ coverage.xml
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Environment variables
+# 🔐 ENVIRONMENT VARIABLES (CRITICAL - NEVER COMMIT)
 .env
+.env.local
+.env.development
+.env.production
+.env.test
+.env.staging
+*.env
+.env.*
+env.local
+env.development
+env.production
+
+# Virtual environments
 .venv
 env/
 venv/
@@ -58,140 +70,266 @@ env.bak/
 venv.bak/
 
 # Streamlit secrets
-# Uncomment this if you want to check in your secrets for demo purposes
 .streamlit/secrets.toml
 
-# VSCode
+# 🔧 DEVELOPMENT TOOLS & EDITORS
 .vscode/
 *.code-workspace
-
-# PyCharm
 .idea/
 
-# macOS
+# 🍎 macOS SYSTEM FILES
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
 
-# Windows
+# 🪟 WINDOWS SYSTEM FILES
 Thumbs.db
+Thumbs.db:encryptable
 ehthumbs.db
+ehthumbs_vista.db
+*.tmp
+*.temp
 Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
 
-# Dependencies
+# 📦 NODE.JS & NPM
 node_modules/
 */node_modules/
-
-# Environment variables
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Build outputs
-backend/dist/
-frontend/dist/
-frontend/build/
-
-# Development
-*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+.pnpm-debug.log*
 
-# Runtime data
+# 🏗️ BUILD OUTPUTS
+backend/dist/
+frontend/dist/
+frontend/build/
+build/
+dist/
+
+# 📝 LOGS & RUNTIME DATA
+*.log
+logs
 pids
 *.pid
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
+# 📊 COVERAGE & TESTING
 coverage/
 *.lcov
-
-# nyc test coverage
 .nyc_output
+.jest/
 
-# Grunt intermediate storage
-.grunt
-
-# Bower dependency directory
-bower_components
-
-# node-waf configuration
-.lock-wscript
-
-# Compiled binary addons
-build/Release
-
-# Dependency directories
-jspm_packages/
-
-# TypeScript v1 declaration files
-typings/
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
+# 🔧 DEVELOPMENT CACHE
+.cache
+.parcel-cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
 .eslintcache
+*.tsbuildinfo
+.npm
+.yarn-integrity
 
-# Microbundle cache
+# 🚄 RAILWAY DEPLOYMENT
+.railway/
+railway.json.bak
+railway-*.json
+
+# 🗄️ DATABASE FILES (LOCAL DEVELOPMENT)
+*.db
+*.sqlite
+*.sqlite3
+data/
+mongodb-data/
+mongo-data/
+db-data/
+database/
+
+# 🔑 SECURITY & CREDENTIALS (CRITICAL)
+# API Keys
+*api-key*
+*apikey*
+*api_key*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# JWT Secrets
+*jwt*secret*
+*jwtsecret*
+
+# OAuth Credentials
+*client*secret*
+*oauth*
+*google*secret*
+
+# MongoDB Connection Strings
+*mongodb*
+*mongo*uri*
+
+# OpenAI API Keys
+*openai*
+*gpt*key*
+
+# 🔧 LOCAL DEVELOPMENT FILES
+.local
+local/
+localhost/
+dev-config/
+dev-settings/
+
+# 📱 MOBILE DEVELOPMENT
+*.mobileprovision
+*.p8
+
+# 🏗️ BUILD TOOLS
+.grunt
+bower_components
+jspm_packages/
+.lock-wscript
+build/Release
 .rpt2_cache/
 .rts2_cache_cjs/
 .rts2_cache_es/
 .rts2_cache_umd/
 
-# Optional REPL history
-.node_repl_history
+# 📚 DOCUMENTATION BUILDS
+docs/_build/
+site/
 
-# Output of 'npm pack'
-*.tgz
+# 🔄 BACKUP FILES
+*.bak
+*.backup
+*.old
+*.orig
+*.tmp
+*~
 
-# Yarn Integrity file
-.yarn-integrity
+# 🧪 TESTING
+test-results/
+playwright-report/
+test-output/
 
-# parcel-bundler cache
-.cache
-.parcel-cache
+# 🌐 BROWSER TESTING
+.selenium/
+screenshots/
 
-# Next.js build output
-.next
+# 📈 ANALYTICS & MONITORING
+.vercel
+.netlify
 
-# Nuxt.js build / generate output
-.nuxt
-dist
+# 🔧 PACKAGE MANAGERS
+.yarn/
+.pnp.*
+yarn.lock
+package-lock.json
+pnpm-lock.yaml
 
-# Gatsby files
-.cache/
-public
+# 🎯 PROJECT SPECIFIC
+# Backend specific
+backend/.env
+backend/.env.*
+backend/logs/
+backend/uploads/
+backend/temp/
 
-# Storybook build outputs
-.out
-.storybook-out
+# Frontend specific  
+frontend/.env
+frontend/.env.*
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
 
-# Temporary folders
-tmp/
-temp/
+# 🚫 SENSITIVE CONFIGURATION FILES
+config.local.js
+config.local.json
+secrets.json
+credentials.json
+auth.json
+keys.json
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# 🔒 SSL CERTIFICATES
+*.crt
+*.key
+*.pem
+*.p12
+*.pfx
+ssl/
+certificates/
 
-# OS generated files
-Thumbs.db
+# 📦 COMPRESSED FILES (often contain sensitive data)
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
 
-# Local development
-.local
+# 🎨 DESIGN FILES (large files)
+*.psd
+*.sketch
+*.fig
+*.ai
 
-# Production deployment configuration
-DEPLOYMENT.md 
+# 📹 MEDIA FILES (large files)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wmv
+*.flv
+
+# 🎵 AUDIO FILES (large files)
+*.mp3
+*.wav
+*.flac
+*.aac
+
+# 🖼️ LARGE IMAGES
+*.raw
+*.tiff
+*.bmp
+
+# 📋 TODO: Remove this line when deployment is ready
+# Production deployment configuration was here but removed for security
+
+# 🔧 DEVELOPMENT NOTES (personal files)
+TODO.md
+NOTES.md
+PERSONAL.md
+SCRATCH.md
+.notes/
+notes/
+
+# 🚀 DEPLOYMENT LOGS
+deploy.log
+deployment.log
+railway.log
+
+# End of .gitignore 
