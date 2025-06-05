@@ -752,7 +752,30 @@ const BIANDetail = () => {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={handleOpenWizard}
+            onClick={() => {
+              console.log('🔍 [CREAR API] ID de la API seleccionada:', id);
+              console.log('🔍 [CREAR API] Verificando si es API de ejemplo...');
+              
+              // Check if this is an example/AI-generated API - be more specific
+              const isExampleAPI = id.startsWith('example-') || 
+                                  id.startsWith('ai-generated-') || 
+                                  id.startsWith('ai-intelligent-') ||
+                                  id.startsWith('popular-example-') || 
+                                  id.startsWith('enhanced-') ||
+                                  id.startsWith('fallback-');
+              
+              console.log('🔍 [CREAR API] ¿Es API de ejemplo?:', isExampleAPI);
+              
+              if (isExampleAPI) {
+                console.log('❌ [CREAR API] Bloqueando creación de API de ejemplo');
+                toast.error('Este es un API de ejemplo. Por favor, busca una API BIAN real para crear una implementación.');
+                navigate('/bian-references');
+                return;
+              }
+              
+              console.log('✅ [CREAR API] API válida, navegando al wizard');
+              navigate(`/apis/create/${id}`);
+            }}
             disabled={companies.length === 0}
           >
             Crear API

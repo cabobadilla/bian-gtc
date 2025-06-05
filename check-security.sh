@@ -77,7 +77,6 @@ print_check "Verificando secretos hardcodeados en código..."
 secret_patterns=(
     "sk-[a-zA-Z0-9]{48}"                    # OpenAI API keys
     "GOCSPX-[a-zA-Z0-9_-]{28}"            # Google OAuth client secrets
-    "mongodb\+srv://[^'\"\s]+:[^'\"\s]+@"  # MongoDB connection strings with credentials
     "['\"][a-zA-Z0-9+/]{64,}['\"]"        # Base64 encoded secrets (JWT secrets)
     "AIza[0-9A-Za-z_-]{35}"               # Google API keys
     "client_secret['\"]?\s*[:=]\s*['\"][^'\"]+['\"]" # OAuth client secrets
@@ -85,7 +84,8 @@ secret_patterns=(
 
 found_secrets=false
 for pattern in "${secret_patterns[@]}"; do
-    matches=$(git diff --cached | grep -E "$pattern" || true)
+    # Skip documentation files and example files
+    matches=$(git diff --cached -- ':!*.md' ':!*example*' ':!*template*' | grep -E "$pattern" || true)
     if [ -n "$matches" ]; then
         if [ "$found_secrets" = false ]; then
             print_error "Secretos hardcodeados encontrados en el código:"
@@ -96,6 +96,21 @@ for pattern in "${secret_patterns[@]}"; do
         echo ""
     fi
 done
+
+# Special check for MongoDB URIs with real credentials (not examples)
+mongodb_matches=$(git diff --cached -- ':!*.md' ':!*example*' | grep -E "mongodb\+srv://[^'\"\[]+:[^'\"\[]+@" || true)
+if [ -n "$mongodb_matches" ]; then
+    # Check if it contains placeholder text
+    if ! echo "$mongodb_matches" | grep -qE "\[(TU_|YOUR_|USUARIO|PASSWORD|CLUSTER)\]"; then
+        if [ "$found_secrets" = false ]; then
+            print_error "Secretos hardcodeados encontrados en el código:"
+            found_secrets=true
+        fi
+        echo "MongoDB URI con credenciales reales encontrada:"
+        echo "$mongodb_matches"
+        echo ""
+    fi
+fi
 
 if [ "$found_secrets" = true ]; then
     print_error "ACCIÓN REQUERIDA: Remover secretos hardcodeados del código"

@@ -41,7 +41,31 @@ const router = express.Router();
  */
 router.post('/', verifyToken, async (req, res) => {
   try {
-    const { name, description, companyId, category, prompt, useAI = false } = req.body;
+    const { 
+      name, 
+      slug, 
+      description, 
+      companyId, 
+      category, 
+      prompt, 
+      useAI = false,
+      customOpenApiSpec,
+      bianDomains,
+      tags,
+      baseReference
+    } = req.body;
+
+    console.log('🔧 [CREATE API] Request received:', {
+      name,
+      slug,
+      companyId,
+      category,
+      useAI,
+      hasCustomSpec: !!customOpenApiSpec,
+      bianDomains,
+      tags,
+      baseReference
+    });
 
     // Validate required fields
     if (!name || !companyId) {
@@ -69,17 +93,31 @@ router.post('/', verifyToken, async (req, res) => {
       });
     }
 
-    // Create basic API
+    // Create basic API with BIAN support
     const api = new API({
       name,
+      slug,
       description,
       company: companyId,
       createdBy: req.user._id,
-      category: category || 'other'
+      category: category || 'other',
+      bianDomains: bianDomains || [{
+        domain: 'Custom',
+        serviceOperations: []
+      }],
+      tags: tags || [],
+      baseReference: baseReference || {
+        type: 'scratch'
+      }
     });
 
-    // If AI enrichment is requested
-    if (useAI && prompt) {
+    // Handle OpenAPI specification
+    if (customOpenApiSpec) {
+      // Use the custom OpenAPI spec from the wizard
+      console.log('🔧 [CREATE API] Using custom OpenAPI spec');
+      // Note: The pre-save middleware will create versions array if empty
+      // We'll update it after save
+    } else if (useAI && prompt) {
       const enrichmentResult = await openaiService.enrichAPIDefinition(prompt);
       
       if (enrichmentResult.success) {
@@ -112,6 +150,20 @@ router.post('/', verifyToken, async (req, res) => {
     }
 
     await api.save();
+
+    // Update the first version with custom OpenAPI spec if provided
+    if (customOpenApiSpec) {
+      console.log('🔧 [CREATE API] Updating first version with custom spec');
+      api.versions[0].openApiSpec = customOpenApiSpec;
+      await api.save();
+    }
+
+    console.log('🔧 [CREATE API] API created successfully:', {
+      apiId: api._id,
+      name: api.name,
+      versionsCount: api.versions.length,
+      bianDomainsCount: api.bianDomains.length
+    });
 
     res.status(201).json({
       success: true,

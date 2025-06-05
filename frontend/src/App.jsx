@@ -21,6 +21,7 @@ import CompanyDetail from './pages/CompanyDetail'
 import APIs from './pages/APIs'
 import APIDetail from './pages/APIDetail'
 import APIEditor from './pages/APIEditor'
+import APIWizard from './pages/APIWizard'
 import Profile from './pages/Profile'
 
 function App() {
@@ -52,6 +53,8 @@ function App() {
             <Route path="apis" element={<APIs />} />
             <Route path="apis/:id" element={<APIDetail />} />
             <Route path="apis/:id/edit" element={<APIEditor />} />
+            <Route path="apis/create/:referenceId" element={<APIWizard />} />
+            <Route path="apis/:id/wizard" element={<APIWizard />} />
             <Route path="profile" element={<Profile />} />
           </Route>
         ) : (

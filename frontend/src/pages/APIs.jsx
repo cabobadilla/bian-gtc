@@ -37,7 +37,8 @@ import {
   Code as CodeIcon,
   Public as PublicIcon,
   Business as BusinessIcon,
-  Lock as LockIcon
+  Lock as LockIcon,
+  AutoAwesome
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { apiService, companyService } from '../services/api';
@@ -182,6 +183,11 @@ const APIs = () => {
 
   const handleEditAPI = (api) => {
     navigate(`/apis/${api._id}/edit`);
+    handleMenuClose();
+  };
+
+  const handleEditWithWizard = (api) => {
+    navigate(`/apis/${api._id}/wizard`);
     handleMenuClose();
   };
 
@@ -509,6 +515,13 @@ const APIs = () => {
         }}>
           <EditIcon sx={{ mr: 1 }} />
           Editar
+        </MenuItem>
+        <MenuItem onClick={() => {
+          console.log('🔧 [FRONTEND] Editar con Wizard clicked for API:', selectedAPI?._id);
+          handleEditWithWizard(selectedAPI);
+        }}>
+          <AutoAwesome sx={{ mr: 1 }} />
+          Editar con Wizard
         </MenuItem>
         <MenuItem onClick={() => {
           console.log('🔧 [FRONTEND] Eliminar menu item clicked for API:', selectedAPI?._id);

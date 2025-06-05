@@ -37,7 +37,8 @@ import {
   Business as BusinessIcon,
   Lock as LockIcon,
   Download as DownloadIcon,
-  Share as ShareIcon
+  Share as ShareIcon,
+  AutoAwesome
 } from '@mui/icons-material';
 import { useQuery, useMutation } from 'react-query';
 import { apiService } from '../services/api';
@@ -204,11 +205,18 @@ const APIDetail = () => {
               Descargar OpenAPI
             </Button>
             <Button
-              variant="contained"
+              variant="outlined"
               startIcon={<EditIcon />}
               onClick={() => navigate(`/apis/${id}/edit`)}
             >
               Editar
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AutoAwesome />}
+              onClick={() => navigate(`/apis/${id}/wizard`)}
+            >
+              Editar con Wizard
             </Button>
           </Box>
         </Box>

@@ -277,7 +277,7 @@ router.get('/google/callback',
       // Redirect to frontend with token and user info
       const frontendUrl = process.env.NODE_ENV === 'production' 
         ? 'https://bian-gtc.onrender.com'
-        : 'http://localhost:3000';
+        : 'http://localhost:5173';
       
       const redirectUrl = `${frontendUrl}/auth/success?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify({
         id: req.user._id,
