@@ -165,14 +165,16 @@ const BIANDetail = () => {
   });
 
   const createAPIMutation = useMutation({
-    mutationFn: (data) => bianService.createAPIFromReference(id, data),
+    mutationFn: (data) => apiService.createAPI(data),
     onSuccess: (data) => {
       toast.success('API creada exitosamente');
       setWizardOpen(false);
-      navigate('/dashboard');
+      return data; // Return the response for use in handleCreateAPI
     },
     onError: (error) => {
+      console.error('Error creating API:', error);
       toast.error('Error creando API');
+      throw error; // Re-throw for handling in handleCreateAPI
     }
   });
 
@@ -190,27 +192,67 @@ const BIANDetail = () => {
     });
   };
 
-  const handleCreateAPI = () => {
-    if (!wizardData.companyId || !wizardData.name) {
-      toast.error('Completa todos los campos requeridos');
+  const handleCreateAPI = async () => {
+    console.log('🚀 [CREATE API] Starting direct API creation from BIAN reference');
+    console.log('🚀 [CREATE API] API Reference:', api.name);
+    
+    // Check if this is an example/AI-generated API
+    const isExampleAPI = id.startsWith('example-') || 
+                        id.startsWith('ai-generated-') || 
+                        id.startsWith('ai-intelligent-') ||
+                        id.startsWith('popular-example-') || 
+                        id.startsWith('enhanced-') ||
+                        id.startsWith('fallback-');
+    
+    if (isExampleAPI) {
+      console.log('❌ [CREATE API] Blocking creation from example API');
+      toast.error('Este es un API de ejemplo. Por favor, busca una API BIAN real para crear una implementación.');
+      navigate('/bian-references');
       return;
     }
 
-    // For AI-generated APIs, we need to pass the complete API data
-    const requestData = {
-      companyId: wizardData.companyId,
-      name: wizardData.name,
-      description: wizardData.description
-    };
-
-    // If this is an AI-generated API, include the complete API data
-    if (wizardData.createdAPI && wizardData.createdAPI.isAIGenerated) {
-      requestData.customizations = {
-        apiData: api // Pass the complete API object
-      };
+    // Get user's first company if available
+    if (companies.length === 0) {
+      toast.error('Debes tener al menos una empresa para crear APIs');
+      return;
     }
 
-    createAPIMutation.mutate(requestData);
+    const firstCompany = companies[0];
+
+    // Create API directly with minimal data
+    const requestData = {
+      companyId: firstCompany._id,
+      name: `${api.name}_Custom`,
+      description: `API personalizada basada en ${api.name}`,
+      category: 'customer-management', // Default category
+      bianDomains: [{
+        domain: api.serviceDomain || 'Custom',
+        serviceOperations: api.serviceOperations?.map(op => op.name) || []
+      }],
+      tags: api.tags || [],
+      baseReference: {
+        type: 'bian',
+        referenceId: id,
+        referenceName: api.name
+      }
+    };
+
+    try {
+      console.log('🚀 [CREATE API] Creating API with data:', requestData);
+      const response = await createAPIMutation.mutateAsync(requestData);
+      
+      const newApiId = response.data.api._id;
+      console.log('✅ [CREATE API] API created successfully with ID:', newApiId);
+      
+      toast.success('API creada exitosamente. Ahora puedes personalizarla.');
+      
+      // Navigate to the API detail page to customize payloads
+      navigate(`/apis/${newApiId}`);
+      
+    } catch (error) {
+      console.error('❌ [CREATE API] Error creating API:', error);
+      toast.error('Error creando la API');
+    }
   };
 
   const getComplexityColor = (complexity) => {
@@ -752,30 +794,7 @@ const BIANDetail = () => {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => {
-              console.log('🔍 [CREAR API] ID de la API seleccionada:', id);
-              console.log('🔍 [CREAR API] Verificando si es API de ejemplo...');
-              
-              // Check if this is an example/AI-generated API - be more specific
-              const isExampleAPI = id.startsWith('example-') || 
-                                  id.startsWith('ai-generated-') || 
-                                  id.startsWith('ai-intelligent-') ||
-                                  id.startsWith('popular-example-') || 
-                                  id.startsWith('enhanced-') ||
-                                  id.startsWith('fallback-');
-              
-              console.log('🔍 [CREAR API] ¿Es API de ejemplo?:', isExampleAPI);
-              
-              if (isExampleAPI) {
-                console.log('❌ [CREAR API] Bloqueando creación de API de ejemplo');
-                toast.error('Este es un API de ejemplo. Por favor, busca una API BIAN real para crear una implementación.');
-                navigate('/bian-references');
-                return;
-              }
-              
-              console.log('✅ [CREAR API] API válida, navegando al wizard');
-              navigate(`/apis/create/${id}`);
-            }}
+            onClick={handleCreateAPI}
             disabled={companies.length === 0}
           >
             Crear API

@@ -1,49 +1,7 @@
 services:
-  # Frontend Service (Unified - serves React build via Express)
+  # Backend API Service
   - type: web
-    name: bian-gtc
-    env: node
-    region: oregon
-    plan: free
-    buildCommand: |
-      echo "🎨 Building Frontend for bian-gtc service..."
-      echo "📁 Current directory: $(pwd)"
-      
-      echo "📦 Installing backend dependencies..."
-      cd backend && npm install --production
-      
-      echo "📦 Installing frontend dependencies..."
-      cd ../frontend && npm install --production
-      
-      echo "🔨 Building frontend for production..."
-      npm run build
-      
-      echo "✅ Verifying build output..."
-      if [ -d "dist" ]; then
-        echo "✅ Frontend build successful - dist/ directory created"
-      else
-        echo "❌ Frontend build failed - dist/ directory not found"
-        exit 1
-      fi
-      
-      echo "🚀 Frontend build completed successfully!"
-    startCommand: cd backend && npm start
-    healthCheckPath: /api/health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: DEBUG
-        value: "ON"
-      - key: PORT
-        value: 10000
-      - key: VITE_API_URL
-        value: https://bian-api-backend.onrender.com/api
-      - key: VITE_GOOGLE_CLIENT_ID
-        fromSecret: true
-
-  # Backend API Service  
-  - type: web
-    name: bian-api-backend
+    name: bian-gtc-backend
     env: node
     region: oregon
     plan: free
@@ -51,14 +9,16 @@ services:
       echo "⚙️ Building Backend Service..."
       cd backend
       npm install --production
-      echo "✅ Backend build completed"
+      echo "✅ Backend dependencies installed"
     startCommand: cd backend && npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
       - key: DEBUG
-        value: "ON"
+        value: "OFF"
+      - key: PORT
+        value: 10000
       - key: MONGODB_URI
         fromSecret: true
       - key: GOOGLE_CLIENT_ID
@@ -69,7 +29,26 @@ services:
         fromSecret: true
       - key: JWT_SECRET
         fromSecret: true
-      - key: PORT
-        value: 10000
       - key: FRONTEND_URL
-        value: https://bian-gtc.onrender.com 
+        value: https://bian-gtc-frontend.onrender.com
+
+  # Frontend Static Site
+  - type: web
+    name: bian-gtc-frontend
+    env: static
+    region: oregon
+    plan: free
+    buildCommand: |
+      echo "🎨 Building Frontend for production..."
+      cd frontend
+      npm install --production
+      npm run build
+      echo "✅ Frontend build completed"
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://bian-gtc-backend.onrender.com
+      - key: VITE_GOOGLE_CLIENT_ID
+        fromSecret: true
+
+databases: [] 
